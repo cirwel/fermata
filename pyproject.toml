@@ -1,0 +1,17 @@
+[project]
+name = "fermata-runtime"
+version = "0.1.0"
+description = "A governed-effect runtime seed where agents may propose and only governed effects may commit."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Kenny Wang" }]
+keywords = ["ai-agents", "governance", "effects", "runtime", "programming-languages"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/CIRWEL/fermata"
+Repository = "https://github.com/CIRWEL/fermata"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "scripts"]

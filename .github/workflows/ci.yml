@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python files
+        run: python -m compileall scripts src
+      - name: Validate JSON fixtures
+        run: |
+          python -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
+          python -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
+      - name: Validate JSONL corpus
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('references/ai-native-tongue-seed-corpus-v0.jsonl')
+          count = 0
+          for line in path.read_text().splitlines():
+              if line.strip():
+                  json.loads(line)
+                  count += 1
+          assert count == 24, count
+          print({'jsonl_records': count})
+          PY
+      - name: Run governed-effect golden checks
+        run: python scripts/run_tongue_golden_tests.py
