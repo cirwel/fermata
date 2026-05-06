@@ -164,8 +164,15 @@ the runtime contract.
 
 ## Near-term roadmap
 
-1. Harden the file adapter against adversarial filesystem races.
-2. Add a second adapter with the same proposal/intent/pause/reject/commit trace.
-3. Split human policy surface from agent utterance surface over the same IR.
-4. Expand golden traces into reusable katas for downstream runtimes.
-5. Compare Fermata examples against existing orchestration and policy-as-code tools.
+Public milestone: [v0.1 — governed-effect language seed](https://github.com/cirwel/fermata/milestone/1)
+
+The next milestone keeps the language narrow: strengthen the commit boundary,
+add one more governed adapter, make the shared IR surfaces explicit, and expand
+examples only where they improve executable traces.
+
+1. [Harden the file adapter against adversarial filesystem races](https://github.com/cirwel/fermata/issues/1).
+2. [Add a second adapter with the same proposal/intent/pause/reject/commit trace](https://github.com/cirwel/fermata/issues/2).
+3. [Split human policy surface from agent utterance surface over the same IR](https://github.com/cirwel/fermata/issues/3).
+4. [Make the interpreter loop explicit over the shared IR](https://github.com/cirwel/fermata/issues/4).
+5. [Expand golden traces into reusable katas for downstream runtimes](https://github.com/cirwel/fermata/issues/5).
+6. [Compare Fermata against adjacent AI language and runtime ecosystems](https://github.com/cirwel/fermata/issues/6).
