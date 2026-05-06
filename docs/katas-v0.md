@@ -1,7 +1,7 @@
 # Governed Effect Katas v0
 
-**Created:** May 05, 2026  
-**Last Updated:** May 05, 2026  
+**Created:** May 05, 2026
+**Last Updated:** May 06, 2026
 **Status:** Draft
 
 ---
@@ -52,7 +52,7 @@ scope charter_note_sandbox {
 Agent counterexample:
 
 ```text
-intend file.write target:"../secrets.txt"
+intend file.write target:"../outside-scope.txt"
 because "save a shortcut note"
 ```
 

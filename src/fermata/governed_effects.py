@@ -552,7 +552,7 @@ def run_self_tests() -> dict[str, Any]:
 
         escaped, escaped_trace = evaluate_file_write(
             sample_scope(root, approval_required=False),
-            sample_proposal("../secrets.txt"),
+            sample_proposal("../outside-scope.txt"),
             approval_granted=True,
         )
         assert escaped.state == EffectState.REJECTED
