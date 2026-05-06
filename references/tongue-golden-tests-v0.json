@@ -17,7 +17,9 @@
       "expected_payload": {
         "claim": "effect creation is not effect execution"
       },
-      "expected_evidence": ["state_machine"]
+      "expected_evidence": [
+        "state_machine"
+      ]
     },
     {
       "input": "doubt target_path because:\"may escape scope\"",
@@ -55,7 +57,9 @@
         "speech_act": "need",
         "reason": "verify before editing",
         "confidence": 0.93,
-        "evidence": ["rule:read_first"],
+        "evidence": [
+          "rule:read_first"
+        ],
         "payload": {
           "utterance": "need file.read target:\"docs/charter.md\" because:\"verify before editing\"",
           "need": {
@@ -65,7 +69,13 @@
           }
         }
       },
-      "expected_contains": ["I need", "`file.read`", "`docs/charter.md`", "verify before editing", "Confidence: 0.93"]
+      "expected_contains": [
+        "I need",
+        "`file.read`",
+        "`docs/charter.md`",
+        "verify before editing",
+        "Confidence: 0.93"
+      ]
     },
     {
       "record": {
@@ -76,14 +86,21 @@
         "speech_act": "boundary",
         "reason": "approval_missing",
         "confidence": 0.9,
-        "evidence": ["approval:absent"],
+        "evidence": [
+          "approval:absent"
+        ],
         "payload": {
           "utterance": "boundary cannot commit effect:file.write reason:approval_missing offer:dry_run",
           "boundary": "cannot commit file.write without required approval",
           "offer": "render dry-run and request approval"
         }
       },
-      "expected_contains": ["Boundary:", "cannot commit", "offer", "request approval"]
+      "expected_contains": [
+        "Boundary:",
+        "cannot commit",
+        "offer",
+        "request approval"
+      ]
     }
   ],
   "file_write_adapter": [
@@ -110,7 +127,14 @@
     {
       "name": "allowed_write_commits",
       "expected_state": "committed",
-      "expected_trace_contains": ["proposal.received", "intent.created", "policy.checked", "dry_run.rendered", "adapter.commit.started", "effect.committed"]
+      "expected_trace_contains": [
+        "proposal.received",
+        "intent.created",
+        "policy.checked",
+        "dry_run.rendered",
+        "adapter.commit.started",
+        "effect.committed"
+      ]
     },
     {
       "name": "path_escape_rejected",
@@ -126,6 +150,123 @@
       "name": "approval_required_pauses",
       "expected_state": "paused",
       "expected_required_input": "human_approval"
+    },
+    {
+      "name": "capability_spoof_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "unsupported_capability_for_operation"
+    },
+    {
+      "name": "target_not_string_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_missing_or_not_string"
+    },
+    {
+      "name": "input_not_object_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_missing_or_not_object"
+    },
+    {
+      "name": "restrictive_umask_file_write_commits_verified",
+      "expected_state": "committed"
+    }
+  ],
+  "memory_write_adapter": [
+    {
+      "name": "allowed_memory_write_commits",
+      "expected_state": "committed",
+      "trace_events_key": "allowed_memory_write_trace_events",
+      "expected_trace_contains": [
+        "proposal.received",
+        "intent.created",
+        "policy.checked",
+        "dry_run.rendered",
+        "adapter.commit.started",
+        "effect.committed"
+      ]
+    },
+    {
+      "name": "memory_content_missing_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_content_missing_or_not_string"
+    },
+    {
+      "name": "memory_missing_capability_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "missing_capability"
+    },
+    {
+      "name": "memory_approval_required_pauses",
+      "expected_state": "paused",
+      "expected_required_input": "human_approval"
+    },
+    {
+      "name": "memory_empty_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_dot_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_path_escape_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_distinct_targets_do_not_collide",
+      "expected_state": "committed"
+    },
+    {
+      "name": "memory_capability_spoof_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "unsupported_capability_for_operation"
+    },
+    {
+      "name": "memory_malformed_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_target_not_string_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_missing_or_not_string"
+    },
+    {
+      "name": "memory_input_not_object_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_missing_or_not_object"
+    },
+    {
+      "name": "memory_malformed_shape_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_lifespan_invalid_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_lifespan_invalid"
+    },
+    {
+      "name": "memory_record_too_large_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_too_large"
+    },
+    {
+      "name": "memory_tampered_hash_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_reserved_suffix_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_reserved_suffix"
+    },
+    {
+      "name": "memory_restrictive_umask_commits_verified",
+      "expected_state": "committed"
     }
   ]
 }

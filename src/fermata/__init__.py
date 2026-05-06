@@ -8,7 +8,11 @@ from fermata.governed_effects import (
     Scope,
     Trace,
     evaluate_file_write,
+    evaluate_memory_write,
+    memory_store_path,
 )
+from fermata.tongue_parser import parse_line
+from fermata.tongue_renderer import render_record
 
 CHORUS = "Agents may propose; only governed effects may commit."
 __version__ = "0.1.0"
@@ -23,4 +27,8 @@ __all__ = [
     "Trace",
     "__version__",
     "evaluate_file_write",
+    "evaluate_memory_write",
+    "memory_store_path",
+    "parse_line",
+    "render_record",
 ]

@@ -12,6 +12,12 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["jsonschema>=4.0"]
 
+[project.scripts]
+fermata-local-adapter-spike = "fermata.governed_effects:main"
+fermata-parse-tongue = "fermata.tongue_parser:main"
+fermata-render-tongue = "fermata.tongue_renderer:main"
+fermata-golden-checks = "fermata.golden_checks:main"
+
 [project.urls]
 Homepage = "https://github.com/CIRWEL/fermata"
 Repository = "https://github.com/CIRWEL/fermata"

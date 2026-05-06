@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the governed file-write adapter spike from the package module."""
+"""Run the governed local adapter spike evidence from the package module."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""Governed effect runtime primitives for the v0 file-write adapter.
+"""Governed effect runtime primitives for v0 file and memory adapters.
 
 The module is intentionally small: one scope type, one proposal/intent shape,
-one file adapter, and enough trace evidence to make "committed" a runtime fact
+two local adapters, and enough trace evidence to make "committed" a runtime fact
 rather than an agent claim.
 """
 
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -171,6 +172,24 @@ def is_inside(parent: Path, child: Path) -> bool:
         return False
 
 
+def ensure_private_directory(path: Path, *, root: Path) -> None:
+    """Create an internal adapter directory tree with owner read/write/search."""
+
+    path.mkdir(parents=True, exist_ok=True)
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
+    if resolved_path != resolved_root and not is_inside(resolved_root, resolved_path):
+        raise ValueError("directory_outside_private_root")
+
+    current = resolved_root
+    os.chmod(current, 0o700)
+    if resolved_path == resolved_root:
+        return
+    for part in resolved_path.relative_to(resolved_root).parts:
+        current = current / part
+        os.chmod(current, 0o700)
+
+
 def reject(
     trace: Trace,
     scope: Scope,
@@ -243,13 +262,40 @@ def evaluate_file_write(
     if intent.adapter != "file" or intent.operation != "write":
         return reject(trace, scope, intent.intent_id, "unsupported_adapter_operation"), trace
 
-    if intent.required_capability not in scope.capabilities:
+    operation_capability = "file.write"
+    if intent.required_capability != operation_capability:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "unsupported_capability_for_operation",
+            declared_capability=intent.required_capability,
+            required_capability=operation_capability,
+        ), trace
+
+    if operation_capability not in scope.capabilities:
         return reject(
             trace,
             scope,
             intent.intent_id,
             "missing_capability",
-            required_capability=intent.required_capability,
+            required_capability=operation_capability,
+        ), trace
+
+    if not isinstance(intent.target, str):
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "target_missing_or_not_string",
+        ), trace
+
+    if not isinstance(intent.input, dict):
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "input_missing_or_not_object",
         ), trace
 
     target_path = normalize_target(scope, intent.target)
@@ -321,10 +367,18 @@ def evaluate_file_write(
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = target_path.with_name(f".{target_path.name}.{uuid.uuid4().hex}.tmp")
-        temp_path.write_bytes(content_bytes)
+        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as temp_file:
+            os.fchmod(temp_file.fileno(), 0o600)
+            temp_file.write(content_bytes)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        readback = temp_path.read_bytes()
+        output_hash = sha256_bytes(readback)
+        if output_hash != input_hash:
+            raise ValueError("read_back_hash_mismatch")
         temp_path.replace(target_path)
-        readback = target_path.read_bytes()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         trace.add(
             "adapter.commit.failed",
             error_type=exc.__class__.__name__,
@@ -386,6 +440,414 @@ def evaluate_file_write(
     ), trace
 
 
+def memory_store_path(scope: Scope, target: str) -> Path:
+    """Return the local v0 memory ledger path for a scoped memory target."""
+
+    target_text = target.strip()
+    path_parts = target_text.split("/")
+    if (
+        not target_text
+        or target_text != target
+        or target_text.startswith("/")
+        or target_text.endswith("/")
+        or any(part in {"", ".", ".."} for part in path_parts)
+    ):
+        raise ValueError("memory_target_outside_scope")
+
+    raw = Path(*path_parts)
+    if raw.is_absolute() or any(part in {"", ".", ".."} for part in raw.parts):
+        raise ValueError("memory_target_outside_scope")
+    if any(part.endswith(".jsonl") for part in raw.parts):
+        raise ValueError("memory_target_reserved_suffix")
+
+    store_root = scope.sandbox_root / ".fermata-memory"
+    ledger_path = store_root / raw.parent / f"{raw.name}.jsonl"
+    resolved_store_root = store_root.resolve()
+    resolved = ledger_path.resolve()
+    if not is_inside(scope.sandbox_root, resolved) or not is_inside(
+        resolved_store_root,
+        resolved,
+    ):
+        raise ValueError("memory_target_outside_scope")
+    return resolved
+
+
+MEMORY_LIFESPANS = frozenset({"session", "project", "durable"})
+MEMORY_RECORD_STRING_FIELDS = frozenset(
+    {
+        "record_id",
+        "target",
+        "lifespan",
+        "actor",
+        "proposal_id",
+        "intent_id",
+        "trace_id",
+        "input_sha256",
+        "committed_at",
+    }
+)
+
+
+def validate_memory_record(
+    record: Any,
+    *,
+    expected_target: str,
+    expected_version: int | None = None,
+) -> dict[str, Any]:
+    """Validate one local memory ledger record before trusting it."""
+
+    if not isinstance(record, dict):
+        raise ValueError("memory_record_not_object")
+    for field in MEMORY_RECORD_STRING_FIELDS:
+        value = record.get(field)
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"memory_record_{field}_invalid")
+    if record["target"] != expected_target:
+        raise ValueError("memory_record_target_mismatch")
+    version = record.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError("memory_record_version_invalid")
+    if expected_version is not None and version != expected_version:
+        raise ValueError("memory_record_version_sequence_invalid")
+    if not isinstance(record.get("content"), str):
+        raise ValueError("memory_record_content_invalid")
+    if record["input_sha256"] != sha256_bytes(record["content"].encode("utf-8")):
+        raise ValueError("memory_record_input_hash_mismatch")
+    provenance = record.get("provenance")
+    if not isinstance(provenance, list) or not all(
+        isinstance(item, str) and item for item in provenance
+    ):
+        raise ValueError("memory_record_provenance_invalid")
+    input_hash = record["input_sha256"]
+    if len(input_hash) != 64 or not all(
+        char in "0123456789abcdef" for char in input_hash.lower()
+    ):
+        raise ValueError("memory_record_input_hash_invalid")
+    if record["lifespan"] not in MEMORY_LIFESPANS:
+        raise ValueError("memory_record_lifespan_invalid")
+    return record
+
+
+def evaluate_memory_write(
+    scope: Scope,
+    proposal: Proposal,
+    *,
+    approval_granted: bool = False,
+) -> tuple[EffectResult, Trace]:
+    """Evaluate one governed local memory-write proposal end to end.
+
+    The v0 memory adapter is deliberately boring and credential-free: it appends a
+    JSONL record under the scope sandbox, then reads the record back by ID and
+    version. A committed memory write means the local memory ledger contains the
+    proposed record and the runtime verified its SHA-256 evidence.
+    """
+
+    trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
+    trace.add(
+        "proposal.received",
+        proposal_id=proposal.proposal_id,
+        actor=proposal.actor,
+        speech_act=proposal.speech_act,
+        confidence=proposal.confidence,
+    )
+
+    if proposal.speech_act != "intend" or proposal.intent is None:
+        return reject(trace, scope, None, "proposal_is_not_an_intent"), trace
+
+    intent = proposal.intent
+    trace.add(
+        "intent.created",
+        intent_id=intent.intent_id,
+        adapter=intent.adapter,
+        operation=intent.operation,
+        target=intent.target,
+    )
+
+    if intent.adapter != "memory" or intent.operation != "write":
+        return reject(trace, scope, intent.intent_id, "unsupported_adapter_operation"), trace
+
+    operation_capability = "memory.write"
+    if intent.required_capability != operation_capability:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "unsupported_capability_for_operation",
+            declared_capability=intent.required_capability,
+            required_capability=operation_capability,
+        ), trace
+
+    if operation_capability not in scope.capabilities:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "missing_capability",
+            required_capability=operation_capability,
+        ), trace
+
+    if not isinstance(intent.target, str):
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "target_missing_or_not_string",
+        ), trace
+
+    if not isinstance(intent.input, dict):
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "input_missing_or_not_object",
+        ), trace
+
+    try:
+        ledger_path = memory_store_path(scope, intent.target)
+    except ValueError as exc:
+        return reject(trace, scope, intent.intent_id, str(exc), target=intent.target), trace
+
+    content = intent.input.get("content")
+    if not isinstance(content, str):
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "memory_content_missing_or_not_string",
+        ), trace
+
+    content_bytes = content.encode("utf-8")
+    if len(content_bytes) > scope.max_bytes:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "input_too_large",
+            bytes=len(content_bytes),
+            max_bytes=scope.max_bytes,
+        ), trace
+
+    provenance = intent.input.get("provenance", proposal.evidence)
+    if not isinstance(provenance, list) or not all(
+        isinstance(item, str) and item for item in provenance
+    ):
+        return reject(trace, scope, intent.intent_id, "memory_provenance_invalid"), trace
+
+    lifespan = intent.input.get("lifespan", "session")
+    if not isinstance(lifespan, str) or lifespan not in MEMORY_LIFESPANS:
+        return reject(trace, scope, intent.intent_id, "memory_lifespan_invalid"), trace
+
+    existing_records: list[dict[str, Any]] = []
+    if ledger_path.exists():
+        try:
+            record_number = 0
+            for line in ledger_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                record_number += 1
+                record = validate_memory_record(
+                    json.loads(line),
+                    expected_target=intent.target,
+                    expected_version=record_number,
+                )
+                existing_records.append(record)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                "memory_store_unreadable",
+                error_type=exc.__class__.__name__,
+            ), trace
+
+    input_hash = sha256_bytes(content_bytes)
+    version = len(existing_records) + 1
+    record_id = f"mem_{uuid.uuid4().hex[:12]}"
+
+    committed_at = now_timestamp()
+    memory_record = {
+        "record_id": record_id,
+        "version": version,
+        "target": intent.target,
+        "content": content,
+        "lifespan": lifespan,
+        "provenance": provenance,
+        "actor": proposal.actor,
+        "proposal_id": proposal.proposal_id,
+        "intent_id": intent.intent_id,
+        "trace_id": trace.trace_id,
+        "input_sha256": input_hash,
+        "committed_at": committed_at,
+    }
+    try:
+        validate_memory_record(
+            memory_record,
+            expected_target=intent.target,
+            expected_version=version,
+        )
+        record_bytes = (json.dumps(memory_record, sort_keys=True) + "\n").encode(
+            "utf-8"
+        )
+    except (TypeError, ValueError) as exc:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "memory_record_invalid",
+            error_type=exc.__class__.__name__,
+        ), trace
+    record_hash = sha256_bytes(record_bytes)
+    if len(record_bytes) > scope.max_bytes:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "input_too_large",
+            bytes=len(record_bytes),
+            max_bytes=scope.max_bytes,
+            measured="memory_record",
+        ), trace
+
+    trace.add(
+        "policy.checked",
+        result="allowed",
+        checks=[
+            "capability:memory.write",
+            "inside_scope",
+            "content_bytes_under_limit",
+            "record_bytes_under_limit",
+        ],
+    )
+    trace.add(
+        "dry_run.rendered",
+        summary=f"Append memory record {record_id} version {version} to {intent.target}",
+        input_sha256=input_hash,
+        record_sha256=record_hash,
+    )
+
+    if "memory.write" in scope.approval_required_for and not approval_granted:
+        trace.add("approval.requested", authority="human", effect_kind="memory.write")
+        return pause(
+            trace,
+            scope,
+            intent.intent_id,
+            "human_approval",
+            reason="approval_required_before_commit",
+        ), trace
+
+    trace.add("approval.granted", authority="human" if approval_granted else "runtime")
+
+    trace.add("adapter.commit.started", adapter="memory", target=intent.target)
+
+    candidate_records = [*existing_records, memory_record]
+    candidate_bytes = b"".join(
+        (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+        for record in candidate_records
+    )
+    temp_path = ledger_path.with_name(f".{ledger_path.name}.{uuid.uuid4().hex}.tmp")
+    replaced = False
+    try:
+        memory_store_root = (scope.sandbox_root / ".fermata-memory").resolve()
+        ensure_private_directory(ledger_path.parent, root=memory_store_root)
+        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as temp_ledger:
+            os.fchmod(temp_ledger.fileno(), 0o600)
+            temp_ledger.write(candidate_bytes)
+            temp_ledger.flush()
+            os.fsync(temp_ledger.fileno())
+
+        readback_records: list[dict[str, Any]] = []
+        record_number = 0
+        for line in temp_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record_number += 1
+            record = validate_memory_record(
+                json.loads(line),
+                expected_target=intent.target,
+                expected_version=record_number,
+            )
+            readback_records.append(record)
+
+        matched = next(
+            (
+                record
+                for record in readback_records
+                if record.get("record_id") == record_id
+                and record.get("version") == version
+            ),
+            None,
+        )
+        if matched != memory_record:
+            raise ValueError("memory_read_back_mismatch")
+
+        os.replace(temp_path, ledger_path)
+        replaced = True
+        try:
+            dir_fd = os.open(ledger_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError as exc:
+            trace.add(
+                "adapter.directory_fsync.failed",
+                error_type=exc.__class__.__name__,
+                target=intent.target,
+            )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        if not replaced:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        trace.add(
+            "adapter.commit.failed",
+            error_type=exc.__class__.__name__,
+            target=intent.target,
+        )
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "adapter_commit_failed",
+            error_type=exc.__class__.__name__,
+        ), trace
+
+    ack = {
+        "adapter": "memory",
+        "target": intent.target,
+        "handle": record_id,
+        "record_id": record_id,
+        "version": version,
+        "sha256": record_hash,
+        "bytes": len(record_bytes),
+        "store": str(ledger_path),
+    }
+    verification = {
+        "status": "verified",
+        "method": "read_back_memory_record",
+        "detail": {"record_id": record_id, "version": version, "sha256": record_hash},
+    }
+    trace.add(
+        "effect.committed",
+        acknowledgement=ack,
+        verification=verification,
+        committed_at=committed_at,
+    )
+
+    return EffectResult(
+        state=EffectState.COMMITTED,
+        trace_id=trace.trace_id,
+        effect_id=f"effect_{uuid.uuid4().hex[:8]}",
+        intent_id=intent.intent_id,
+        scope_id=scope.scope_id,
+        acknowledgement=ack,
+        verification=verification,
+        committed_at=committed_at,
+    ), trace
+
+
 def sample_proposal(target: str = "charter-note.txt") -> Proposal:
     """Build the canonical sample file-write proposal."""
 
@@ -420,6 +882,56 @@ def sample_scope(root: Path, *, approval_required: bool = True) -> Scope:
         capabilities=frozenset({"file.read", "file.write"}),
         approval_required_for=(
             frozenset({"file.write"}) if approval_required else frozenset()
+        ),
+    )
+
+
+def sample_memory_proposal(
+    target: str = "project/notes",
+    *,
+    content: str = "Proposal is not commit; memory writes need provenance.\n",
+    provenance: list[str] | None = None,
+    lifespan: Any = "project",
+) -> Proposal:
+    """Build the canonical sample memory-write proposal."""
+
+    proposal_id = "prop_memory_write_001"
+    return Proposal(
+        proposal_id=proposal_id,
+        actor="agent:hermes",
+        speech_act="intend",
+        reason="persist a governed-effect lesson with provenance",
+        confidence=0.81,
+        evidence=["issue:#2", "scope:local_memory_sandbox"],
+        intent=Intent(
+            intent_id="intent_memory_write_001",
+            proposal_id=proposal_id,
+            adapter="memory",
+            operation="write",
+            target=target,
+            input={
+                "content": content,
+                "lifespan": lifespan,
+                "provenance": (
+                    provenance
+                    if provenance is not None
+                    else ["issue:#2", "golden:memory_write_adapter"]
+                ),
+            },
+            required_capability="memory.write",
+        ),
+    )
+
+
+def sample_memory_scope(root: Path, *, approval_required: bool = True) -> Scope:
+    """Build the canonical local memory-write scope."""
+
+    return Scope(
+        scope_id="local_memory_sandbox",
+        sandbox_root=root.resolve(),
+        capabilities=frozenset({"memory.write"}),
+        approval_required_for=(
+            frozenset({"memory.write"}) if approval_required else frozenset()
         ),
     )
 
@@ -550,6 +1062,28 @@ def run_self_tests() -> dict[str, Any]:
             event["type"] for event in committed_trace.events
         ]
 
+        old_umask = os.umask(0o444)
+        try:
+            restrictive_file, restrictive_file_trace = evaluate_file_write(
+                sample_scope(root, approval_required=False),
+                sample_proposal("restrictive-umask-file.txt"),
+                approval_granted=True,
+            )
+        finally:
+            os.umask(old_umask)
+        assert restrictive_file.state == EffectState.COMMITTED
+        restrictive_file_target = Path(restrictive_file.acknowledgement["target"])
+        assert restrictive_file_target.read_text(encoding="utf-8") == (
+            "Agents may propose; only governed effects may commit.\n"
+        )
+        assert "adapter.commit.failed" not in [
+            event["type"] for event in restrictive_file_trace.events
+        ]
+        results["restrictive_umask_file_write_commits_verified"] = (
+            restrictive_file.to_record()
+        )
+        results["restrictive_umask_file_write_trace"] = restrictive_file_trace.to_record()
+
         escaped, escaped_trace = evaluate_file_write(
             sample_scope(root, approval_required=False),
             sample_proposal("../outside-scope.txt"),
@@ -582,6 +1116,101 @@ def run_self_tests() -> dict[str, Any]:
         results["missing_capability_rejected"] = no_cap.to_record()
         results["missing_capability_trace"] = no_cap_trace.to_record()
 
+        spoofed_file_proposal = Proposal(
+            proposal_id="prop_file_spoof_001",
+            actor="agent:hermes",
+            speech_act="intend",
+            reason="adapter operation should derive its own capability",
+            confidence=0.68,
+            evidence=[],
+            intent=Intent(
+                intent_id="intent_file_spoof_001",
+                proposal_id="prop_file_spoof_001",
+                adapter="file",
+                operation="write",
+                target="spoofed-capability.txt",
+                input={"content": "should not commit\n"},
+                required_capability="memory.write",
+            ),
+        )
+        spoofed_file, spoofed_file_trace = evaluate_file_write(
+            Scope(
+                scope_id="memory_only_scope",
+                sandbox_root=root.resolve(),
+                capabilities=frozenset({"memory.write"}),
+                approval_required_for=frozenset(),
+            ),
+            spoofed_file_proposal,
+            approval_granted=True,
+        )
+        assert spoofed_file.state == EffectState.REJECTED
+        assert spoofed_file.rejection_reason == "unsupported_capability_for_operation"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in spoofed_file_trace.events
+        ]
+        assert not (root / "spoofed-capability.txt").exists()
+        results["capability_spoof_rejected"] = spoofed_file.to_record()
+        results["capability_spoof_trace"] = spoofed_file_trace.to_record()
+
+        bad_file_target, bad_file_target_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            Proposal(
+                proposal_id="prop_file_bad_target_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="malformed target should reject under governance",
+                confidence=0.66,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_file_bad_target_001",
+                    proposal_id="prop_file_bad_target_001",
+                    adapter="file",
+                    operation="write",
+                    target=123,
+                    input={"content": "should not commit\n"},
+                    required_capability="file.write",
+                ),
+            ),
+            approval_granted=True,
+        )
+        assert bad_file_target.state == EffectState.REJECTED
+        assert bad_file_target.rejection_reason == "target_missing_or_not_string"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_file_target_trace.events
+        ]
+        results["target_not_string_rejected"] = bad_file_target.to_record()
+        results["target_not_string_trace"] = bad_file_target_trace.to_record()
+
+        bad_file_input, bad_file_input_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            Proposal(
+                proposal_id="prop_file_bad_input_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="malformed input should reject under governance",
+                confidence=0.65,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_file_bad_input_001",
+                    proposal_id="prop_file_bad_input_001",
+                    adapter="file",
+                    operation="write",
+                    target="bad-input.txt",
+                    input=None,
+                    required_capability="file.write",
+                ),
+            ),
+            approval_granted=True,
+        )
+        assert bad_file_input.state == EffectState.REJECTED
+        assert bad_file_input.rejection_reason == "input_missing_or_not_object"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_file_input_trace.events
+        ]
+        assert not (root / "bad-input.txt").exists()
+        results["input_not_object_rejected"] = bad_file_input.to_record()
+        results["input_not_object_trace"] = bad_file_input_trace.to_record()
+
         paused, paused_trace = evaluate_file_write(
             sample_scope(root, approval_required=True),
             sample_proposal("needs-approval.txt"),
@@ -595,6 +1224,415 @@ def run_self_tests() -> dict[str, Any]:
         assert not (root / "needs-approval.txt").exists()
         results["approval_required_pauses"] = paused.to_record()
         results["approval_required_trace"] = paused_trace.to_record()
+
+        memory_committed, memory_committed_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=True),
+            sample_memory_proposal(),
+            approval_granted=True,
+        )
+        assert memory_committed.state == EffectState.COMMITTED
+        assert memory_committed.acknowledgement is not None
+        assert memory_committed.acknowledgement["adapter"] == "memory"
+        assert memory_committed.acknowledgement["record_id"]
+        assert memory_committed.acknowledgement["version"] == 1
+        assert memory_committed.verification is not None
+        assert memory_committed.verification["status"] == "verified"
+        memory_store = Path(memory_committed.acknowledgement["store"])
+        assert memory_store.exists()
+        assert memory_committed.acknowledgement["record_id"] in memory_store.read_text()
+        results["allowed_memory_write_commits"] = memory_committed.to_record()
+        results["allowed_memory_write_trace"] = memory_committed_trace.to_record()
+        results["allowed_memory_write_trace_events"] = [
+            event["type"] for event in memory_committed_trace.events
+        ]
+
+        bad_memory_proposal = sample_memory_proposal()
+        assert bad_memory_proposal.intent is not None
+        bad_memory_proposal = Proposal(
+            proposal_id="prop_bad_memory_001",
+            actor=bad_memory_proposal.actor,
+            speech_act="intend",
+            reason="malformed memory content should not reach the adapter",
+            confidence=0.72,
+            evidence=bad_memory_proposal.evidence,
+            intent=Intent(
+                intent_id="intent_bad_memory_001",
+                proposal_id="prop_bad_memory_001",
+                adapter="memory",
+                operation="write",
+                target="project/bad-memory",
+                input={},
+                required_capability="memory.write",
+            ),
+        )
+        bad_memory, bad_memory_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            bad_memory_proposal,
+            approval_granted=True,
+        )
+        assert bad_memory.state == EffectState.REJECTED
+        assert bad_memory.rejection_reason == "memory_content_missing_or_not_string"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_memory_trace.events
+        ]
+        results["memory_content_missing_rejected"] = bad_memory.to_record()
+        results["memory_content_missing_trace"] = bad_memory_trace.to_record()
+
+        no_memory_cap_scope = Scope(
+            scope_id="no_memory_write_scope",
+            sandbox_root=root.resolve(),
+            capabilities=frozenset({"memory.read"}),
+            approval_required_for=frozenset(),
+        )
+        no_memory_cap, no_memory_cap_trace = evaluate_memory_write(
+            no_memory_cap_scope,
+            sample_memory_proposal("project/no-capability"),
+            approval_granted=True,
+        )
+        assert no_memory_cap.state == EffectState.REJECTED
+        assert no_memory_cap.rejection_reason == "missing_capability"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in no_memory_cap_trace.events
+        ]
+        results["memory_missing_capability_rejected"] = no_memory_cap.to_record()
+        results["memory_missing_capability_trace"] = no_memory_cap_trace.to_record()
+
+        spoofed_memory_proposal = Proposal(
+            proposal_id="prop_memory_spoof_001",
+            actor="agent:hermes",
+            speech_act="intend",
+            reason="memory writes must require memory.write regardless of proposal text",
+            confidence=0.69,
+            evidence=[],
+            intent=Intent(
+                intent_id="intent_memory_spoof_001",
+                proposal_id="prop_memory_spoof_001",
+                adapter="memory",
+                operation="write",
+                target="project/spoofed-capability",
+                input={
+                    "content": "should not commit\n",
+                    "provenance": ["test:capability-spoof"],
+                },
+                required_capability="file.write",
+            ),
+        )
+        spoofed_memory, spoofed_memory_trace = evaluate_memory_write(
+            Scope(
+                scope_id="file_only_scope",
+                sandbox_root=root.resolve(),
+                capabilities=frozenset({"file.write"}),
+                approval_required_for=frozenset(),
+            ),
+            spoofed_memory_proposal,
+            approval_granted=True,
+        )
+        assert spoofed_memory.state == EffectState.REJECTED
+        assert spoofed_memory.rejection_reason == "unsupported_capability_for_operation"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in spoofed_memory_trace.events
+        ]
+        assert not memory_store_path(
+            sample_memory_scope(root, approval_required=False),
+            "project/spoofed-capability",
+        ).exists()
+        results["memory_capability_spoof_rejected"] = spoofed_memory.to_record()
+        results["memory_capability_spoof_trace"] = spoofed_memory_trace.to_record()
+
+        malformed_store_scope = sample_memory_scope(root, approval_required=False)
+        malformed_store = memory_store_path(malformed_store_scope, "project/malformed")
+        malformed_store.parent.mkdir(parents=True, exist_ok=True)
+        malformed_store.write_text("1\n", encoding="utf-8")
+        malformed_memory, malformed_memory_trace = evaluate_memory_write(
+            malformed_store_scope,
+            sample_memory_proposal("project/malformed"),
+            approval_granted=True,
+        )
+        assert malformed_memory.state == EffectState.REJECTED
+        assert malformed_memory.rejection_reason == "memory_store_unreadable"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in malformed_memory_trace.events
+        ]
+        assert malformed_store.read_text(encoding="utf-8") == "1\n"
+        results["memory_malformed_store_rejected"] = malformed_memory.to_record()
+        results["memory_malformed_store_trace"] = malformed_memory_trace.to_record()
+
+        malformed_shape_store_scope = sample_memory_scope(root, approval_required=False)
+        malformed_shape_store = memory_store_path(
+            malformed_shape_store_scope,
+            "project/malformed-shape",
+        )
+        malformed_shape_store.parent.mkdir(parents=True, exist_ok=True)
+        malformed_shape_store.write_text("{}\n", encoding="utf-8")
+        malformed_shape_memory, malformed_shape_trace = evaluate_memory_write(
+            malformed_shape_store_scope,
+            sample_memory_proposal("project/malformed-shape"),
+            approval_granted=True,
+        )
+        assert malformed_shape_memory.state == EffectState.REJECTED
+        assert malformed_shape_memory.rejection_reason == "memory_store_unreadable"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in malformed_shape_trace.events
+        ]
+        assert malformed_shape_store.read_text(encoding="utf-8") == "{}\n"
+        results["memory_malformed_shape_store_rejected"] = (
+            malformed_shape_memory.to_record()
+        )
+        results["memory_malformed_shape_store_trace"] = malformed_shape_trace.to_record()
+
+        bad_lifespan, bad_lifespan_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            sample_memory_proposal(
+                "project/bad-lifespan",
+                content="invalid lifespan should reject\n",
+                provenance=["test:bad-lifespan"],
+                lifespan={"not": "serializable-as-v0-lifespan"},
+            ),
+            approval_granted=True,
+        )
+        assert bad_lifespan.state == EffectState.REJECTED
+        assert bad_lifespan.rejection_reason == "memory_lifespan_invalid"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_lifespan_trace.events
+        ]
+        assert not memory_store_path(
+            sample_memory_scope(root, approval_required=False),
+            "project/bad-lifespan",
+        ).exists()
+        results["memory_lifespan_invalid_rejected"] = bad_lifespan.to_record()
+        results["memory_lifespan_invalid_trace"] = bad_lifespan_trace.to_record()
+
+        too_large_scope = Scope(
+            scope_id="tiny_memory_scope",
+            sandbox_root=root.resolve(),
+            capabilities=frozenset({"memory.write"}),
+            approval_required_for=frozenset(),
+            max_bytes=256,
+        )
+        too_large_memory, too_large_trace = evaluate_memory_write(
+            too_large_scope,
+            sample_memory_proposal(
+                "project/too-large-record",
+                content="x",
+                provenance=["p" * 600],
+                lifespan="project",
+            ),
+            approval_granted=True,
+        )
+        assert too_large_memory.state == EffectState.REJECTED
+        assert too_large_memory.rejection_reason == "input_too_large"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in too_large_trace.events
+        ]
+        assert not memory_store_path(too_large_scope, "project/too-large-record").exists()
+        results["memory_record_too_large_rejected"] = too_large_memory.to_record()
+        results["memory_record_too_large_trace"] = too_large_trace.to_record()
+
+        tampered_hash_scope = sample_memory_scope(root, approval_required=False)
+        tampered_hash_store = memory_store_path(
+            tampered_hash_scope,
+            "project/tampered-hash",
+        )
+        tampered_hash_store.parent.mkdir(parents=True, exist_ok=True)
+        tampered_hash_store.write_text(
+            json.dumps(
+                {
+                    "record_id": "mem_tampered001",
+                    "version": 1,
+                    "target": "project/tampered-hash",
+                    "content": "tampered content\n",
+                    "lifespan": "project",
+                    "provenance": ["test:tampered-hash"],
+                    "actor": "agent:hermes",
+                    "proposal_id": "prop_tampered_001",
+                    "intent_id": "intent_tampered_001",
+                    "trace_id": "trace_tampered",
+                    "input_sha256": "0" * 64,
+                    "committed_at": now_timestamp(),
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        tampered_hash_memory, tampered_hash_trace = evaluate_memory_write(
+            tampered_hash_scope,
+            sample_memory_proposal("project/tampered-hash"),
+            approval_granted=True,
+        )
+        assert tampered_hash_memory.state == EffectState.REJECTED
+        assert tampered_hash_memory.rejection_reason == "memory_store_unreadable"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in tampered_hash_trace.events
+        ]
+        assert tampered_hash_store.read_text(encoding="utf-8").count("\n") == 1
+        results["memory_tampered_hash_store_rejected"] = (
+            tampered_hash_memory.to_record()
+        )
+        results["memory_tampered_hash_store_trace"] = tampered_hash_trace.to_record()
+
+        reserved_suffix_memory, reserved_suffix_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            sample_memory_proposal("project/foo.jsonl/bar"),
+            approval_granted=True,
+        )
+        assert reserved_suffix_memory.state == EffectState.REJECTED
+        assert reserved_suffix_memory.rejection_reason == "memory_target_reserved_suffix"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in reserved_suffix_trace.events
+        ]
+        results["memory_reserved_suffix_target_rejected"] = (
+            reserved_suffix_memory.to_record()
+        )
+        results["memory_reserved_suffix_target_trace"] = reserved_suffix_trace.to_record()
+
+        old_umask = os.umask(0o444)
+        try:
+            restrictive_umask_scope = sample_memory_scope(
+                root,
+                approval_required=False,
+            )
+            restrictive_umask_memory, restrictive_umask_trace = evaluate_memory_write(
+                restrictive_umask_scope,
+                sample_memory_proposal("project/restrictive-umask"),
+                approval_granted=True,
+            )
+        finally:
+            os.umask(old_umask)
+        assert restrictive_umask_memory.state == EffectState.COMMITTED
+        restrictive_store = memory_store_path(
+            restrictive_umask_scope,
+            "project/restrictive-umask",
+        )
+        assert restrictive_store.read_text(encoding="utf-8").count("\n") == 1
+        assert "adapter.commit.failed" not in [
+            event["type"] for event in restrictive_umask_trace.events
+        ]
+        results["memory_restrictive_umask_commits_verified"] = (
+            restrictive_umask_memory.to_record()
+        )
+        results["memory_restrictive_umask_trace"] = restrictive_umask_trace.to_record()
+
+        bad_memory_target, bad_memory_target_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            Proposal(
+                proposal_id="prop_memory_bad_target_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="malformed target should reject under governance",
+                confidence=0.64,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_memory_bad_target_001",
+                    proposal_id="prop_memory_bad_target_001",
+                    adapter="memory",
+                    operation="write",
+                    target=123,
+                    input={
+                        "content": "should not commit\n",
+                        "provenance": ["test:bad-target"],
+                    },
+                    required_capability="memory.write",
+                ),
+            ),
+            approval_granted=True,
+        )
+        assert bad_memory_target.state == EffectState.REJECTED
+        assert bad_memory_target.rejection_reason == "target_missing_or_not_string"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_memory_target_trace.events
+        ]
+        results["memory_target_not_string_rejected"] = bad_memory_target.to_record()
+        results["memory_target_not_string_trace"] = bad_memory_target_trace.to_record()
+
+        bad_memory_input, bad_memory_input_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            Proposal(
+                proposal_id="prop_memory_bad_input_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="malformed input should reject under governance",
+                confidence=0.63,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_memory_bad_input_001",
+                    proposal_id="prop_memory_bad_input_001",
+                    adapter="memory",
+                    operation="write",
+                    target="project/bad-input",
+                    input=None,
+                    required_capability="memory.write",
+                ),
+            ),
+            approval_granted=True,
+        )
+        assert bad_memory_input.state == EffectState.REJECTED
+        assert bad_memory_input.rejection_reason == "input_missing_or_not_object"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in bad_memory_input_trace.events
+        ]
+        assert not memory_store_path(
+            sample_memory_scope(root, approval_required=False),
+            "project/bad-input",
+        ).exists()
+        results["memory_input_not_object_rejected"] = bad_memory_input.to_record()
+        results["memory_input_not_object_trace"] = bad_memory_input_trace.to_record()
+
+        memory_paused, memory_paused_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=True),
+            sample_memory_proposal("project/needs-approval"),
+            approval_granted=False,
+        )
+        assert memory_paused.state == EffectState.PAUSED
+        assert memory_paused.required_input == "human_approval"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in memory_paused_trace.events
+        ]
+        assert not memory_store_path(
+            sample_memory_scope(root, approval_required=True),
+            "project/needs-approval",
+        ).exists()
+        results["memory_approval_required_pauses"] = memory_paused.to_record()
+        results["memory_approval_required_trace"] = memory_paused_trace.to_record()
+
+        for result_key, rejected_target in {
+            "memory_empty_target_rejected": "",
+            "memory_dot_target_rejected": ".",
+            "memory_path_escape_rejected": "../outside-scope",
+        }.items():
+            rejected_memory, rejected_memory_trace = evaluate_memory_write(
+                sample_memory_scope(root, approval_required=False),
+                sample_memory_proposal(rejected_target),
+                approval_granted=True,
+            )
+            assert rejected_memory.state == EffectState.REJECTED
+            assert rejected_memory.rejection_reason == "memory_target_outside_scope"
+            assert "adapter.commit.started" not in [
+                event["type"] for event in rejected_memory_trace.events
+            ]
+            results[result_key] = rejected_memory.to_record()
+            results[f"{result_key}_trace"] = rejected_memory_trace.to_record()
+
+        plain_target, plain_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            sample_memory_proposal("project/collision"),
+            approval_granted=True,
+        )
+        suffix_target, suffix_trace = evaluate_memory_write(
+            sample_memory_scope(root, approval_required=False),
+            sample_memory_proposal("project/collision.txt"),
+            approval_granted=True,
+        )
+        assert plain_target.state == EffectState.COMMITTED
+        assert suffix_target.state == EffectState.COMMITTED
+        assert plain_target.acknowledgement is not None
+        assert suffix_target.acknowledgement is not None
+        assert plain_target.acknowledgement["store"] != suffix_target.acknowledgement[
+            "store"
+        ]
+        results["memory_distinct_targets_do_not_collide"] = suffix_target.to_record()
+        results["memory_distinct_targets_first_trace"] = plain_trace.to_record()
+        results["memory_distinct_targets_second_trace"] = suffix_trace.to_record()
 
     return results
 

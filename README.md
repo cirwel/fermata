@@ -25,6 +25,11 @@ the runtime checks scope and capability, pauses when approval is required, rejec
 unsafe or malformed paths, commits only through the file adapter, and verifies by
 reading back the resulting bytes and SHA-256 hash.
 
+The second local proof is a governed memory write: an agent proposes
+`memory.write`, the runtime checks capability, provenance, byte budget, and
+approval gates, commits only by appending a scoped JSONL memory record, and
+verifies by reading the record back by ID, version, and SHA-256 evidence.
+
 ## Why "Fermata"?
 
 A fermata is a deliberate hold. The performer does not rush through the note; the
@@ -89,15 +94,31 @@ Proposal
 
 with first-class `Rejected` and `Paused` outcomes.
 
-For the v0 file-write adapter, denial paths are part of the proof:
+For the v0 local adapters, denial paths are part of the proof.
+
+File-write denial paths:
 
 - non-intent proposals are rejected before adapter work;
-- malformed content is rejected before adapter work;
+- malformed target, input, or content is rejected before adapter work;
 - path escapes are rejected before adapter work;
 - missing capability is rejected before adapter work;
+- spoofed or mismatched operation capability is rejected before adapter work;
 - directory targets are rejected before adapter work;
 - adapter filesystem errors return governed rejection records;
 - approval-required writes pause without touching the target.
+
+Memory-write denial paths:
+
+- malformed memory target, input, content, lifespan, or provenance is rejected before adapter work;
+- empty, dot, traversal, reserved `.jsonl`, or out-of-scope memory targets are rejected before adapter work;
+- missing `memory.write` capability is rejected before adapter work;
+- spoofed or mismatched operation capability is rejected before adapter work;
+- invalid provenance is rejected before adapter work;
+- malformed existing memory ledgers are rejected before append;
+- malformed existing memory ledger records are rejected before append;
+- tampered existing memory record hashes are rejected before append;
+- oversized serialized memory records are rejected before append;
+- approval-required memory writes pause without touching the memory ledger.
 
 ## Definition of committed
 
@@ -114,6 +135,15 @@ bytes written
 + trace records actor, scope, adapter, target, ack/evidence
 ```
 
+For the v0 local memory-write adapter, committed means:
+
+```text
+JSONL memory record appended and fsynced under the scoped sandbox
++ record carries ID, version, provenance, actor, intent, trace, and content hash
++ runtime can read the record back by ID/version
++ trace records adapter acknowledgement and verification evidence
+```
+
 ## Quickstart
 
 The v0 runtime code uses only the Python standard library. The schema-validating
@@ -123,7 +153,7 @@ golden checks use the `dev` extra.
 python3 -m pip install -e '.[dev]'
 python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
-python3 scripts/run_tongue_golden_tests.py
+fermata-golden-checks
 ```
 
 Expected final status:
@@ -132,22 +162,25 @@ Expected final status:
 {"status": "passed"}
 ```
 
-To see the file-write adapter evidence directly:
+To see the local adapter evidence directly:
 
 ```bash
-python3 scripts/governed_effect_file_write_spike.py
+fermata-local-adapter-spike
 ```
+
+The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept
+for continuity with the first boring adapter.
 
 ## Try the public speech parser
 
 ```bash
-python3 scripts/parse_tongue_line.py 'boundary cannot commit effect:file.write reason:approval_missing offer:dry_run'
+fermata-parse-tongue 'boundary cannot commit effect:file.write reason:approval_missing offer:dry_run'
 ```
 
 ## Render seed corpus examples
 
 ```bash
-python3 scripts/render_tongue_record.py references/ai-native-tongue-seed-corpus-v0.jsonl --limit 6
+fermata-render-tongue references/ai-native-tongue-seed-corpus-v0.jsonl --limit 6
 ```
 
 ## Contributing
@@ -171,7 +204,7 @@ add one more governed adapter, make the shared IR surfaces explicit, and expand
 examples only where they improve executable traces.
 
 1. [Harden the file adapter against adversarial filesystem races](https://github.com/cirwel/fermata/issues/1).
-2. [Add a second adapter with the same proposal/intent/pause/reject/commit trace](https://github.com/cirwel/fermata/issues/2).
+2. [Add a second adapter with the same proposal/intent/pause/reject/commit trace](https://github.com/cirwel/fermata/issues/2) — landed as local `memory.write`.
 3. [Split human policy surface from agent utterance surface over the same IR](https://github.com/cirwel/fermata/issues/3).
 4. [Make the interpreter loop explicit over the shared IR](https://github.com/cirwel/fermata/issues/4).
 5. [Expand golden traces into reusable katas for downstream runtimes](https://github.com/cirwel/fermata/issues/5).
