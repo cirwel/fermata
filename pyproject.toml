@@ -9,9 +9,19 @@ authors = [{ name = "Kenny Wang" }]
 keywords = ["ai-agents", "governance", "effects", "runtime", "programming-languages"]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["jsonschema>=4.0"]
+
 [project.urls]
 Homepage = "https://github.com/CIRWEL/fermata"
 Repository = "https://github.com/CIRWEL/fermata"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "scripts"]

@@ -1,7 +1,7 @@
 # Fermata
 
-**Created:** May 05, 2026  
-**Last Updated:** May 05, 2026  
+**Created:** May 05, 2026
+**Last Updated:** May 06, 2026
 **Status:** v0 governed-effect runtime seed
 
 ---
@@ -53,6 +53,7 @@ scripts/
 src/
   fermata/
     __init__.py
+    governed_effects.py
 ```
 
 ## State model
@@ -85,9 +86,11 @@ bytes written
 
 ## Run the checks
 
-No third-party dependencies are required for the v0 spike.
+The v0 runtime code uses only the Python standard library. The schema-validating
+golden checks use the `dev` extra.
 
 ```bash
+python3 -m pip install -e '.[dev]'
 python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
 python3 scripts/run_tongue_golden_tests.py

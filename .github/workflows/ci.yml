@@ -12,13 +12,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install dev dependencies
+        run: python -m pip install -e ".[dev]"
       - name: Compile Python files
         run: python -m compileall scripts src
       - name: Validate JSON fixtures
         run: |
           python -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
           python -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
-      - name: Validate JSONL corpus
+      - name: Validate JSONL corpus is parseable
         run: |
           python - <<'PY'
           import json

@@ -1,7 +1,7 @@
 # Tongue Evaluation Rubric v0
 
-**Created:** May 05, 2026  
-**Last Updated:** May 05, 2026  
+**Created:** May 05, 2026
+**Last Updated:** May 06, 2026
 **Status:** Draft
 
 ---
@@ -32,6 +32,10 @@ They cover:
 1. Parser cases for `need`, `claim`, `doubt`, `remember`, and `boundary`.
 2. Renderer cases for warm Discord-readable text.
 3. File-write adapter cases for:
+   - non-intent proposals rejected before adapter work;
+   - malformed content rejected before adapter work;
+   - directory targets rejected before adapter work;
+   - adapter filesystem errors return governed rejection records;
    - allowed write commits;
    - path escape rejected before adapter call;
    - missing capability rejected before adapter call;
@@ -40,7 +44,8 @@ They cover:
 Run them with:
 
 ```bash
-python3 ~/.hermes/skills/software-development/ai-language-design/scripts/run_tongue_golden_tests.py
+python3 -m pip install -e '.[dev]'
+python3 scripts/run_tongue_golden_tests.py
 ```
 
 ## Machine Checks
@@ -69,6 +74,7 @@ Passes if:
 Passes if:
 
 - `CommittedEffect` requires adapter acknowledgement and read-back verification;
+- emitted effect and trace records validate against the canonical JSON Schema;
 - denied/paused states do not call the adapter commit function;
 - trace includes state transitions;
 - local filesystem side effects occur only under a temp sandbox.

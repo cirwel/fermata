@@ -220,7 +220,7 @@
     },
     "EffectRecord": {
       "type": "object",
-      "required": ["schema_version", "record_type", "effect_id", "state", "intent_id", "scope_id", "trace_id"],
+      "required": ["schema_version", "record_type", "effect_id", "state", "scope_id", "trace_id"],
       "additionalProperties": false,
       "properties": {
         "schema_version": { "const": "0.1" },
@@ -239,6 +239,7 @@
         "acknowledgement": { "$ref": "#/$defs/Acknowledgement" },
         "verification": { "$ref": "#/$defs/Verification" },
         "rejection_reason": { "type": "string" },
+        "required_input": { "$ref": "#/$defs/NonEmptyString" },
         "committed_at": { "$ref": "#/$defs/IsoTimestamp" }
       },
       "allOf": [
@@ -247,7 +248,7 @@
             "properties": { "state": { "const": "committed" } },
             "required": ["state"]
           },
-          "then": { "required": ["acknowledgement", "verification", "committed_at"] }
+          "then": { "required": ["intent_id", "acknowledgement", "verification", "committed_at"] }
         },
         {
           "if": {
@@ -255,6 +256,13 @@
             "required": ["state"]
           },
           "then": { "required": ["rejection_reason"] }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "paused" } },
+            "required": ["state"]
+          },
+          "then": { "required": ["intent_id", "required_input"] }
         }
       ]
     },
