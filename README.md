@@ -8,8 +8,8 @@
 
 > **Agents may propose; only governed effects may commit.**
 
-Fermata is a governed-effect runtime seed for AI agents. It is not another agent
-orchestration framework, and it is not YAML for workflows. It is the runtime
+Fermata is a small governed-effect runtime seed for AI agents. It is not another
+agent orchestration framework, and it is not YAML for workflows. It is the runtime
 contract layer between agent proposals and committed external-world effects.
 
 ```text
@@ -20,10 +20,10 @@ governed runtime in the middle
 committed effects below
 ```
 
-The first boring case is a governed file write: an agent proposes `file.write`,
-the runtime checks scope and capability, pauses when approval is required, commits
-only through the file adapter, and verifies by reading back the resulting bytes and
-SHA-256 hash.
+The first boring proof is a governed file write: an agent proposes `file.write`,
+the runtime checks scope and capability, pauses when approval is required, rejects
+unsafe or malformed paths, commits only through the file adapter, and verifies by
+reading back the resulting bytes and SHA-256 hash.
 
 ## Why "Fermata"?
 
@@ -32,9 +32,29 @@ system waits at a meaningful boundary until the next action is warranted. This r
 uses that metaphor for AI effects: pause at the boundary, verify the conditions,
 and only then commit.
 
+## What Fermata is
+
+- A runtime contract for governed external effects.
+- A typed record shape for scopes, proposals, intents, effect outcomes, and traces.
+- A testable boundary between model/orchestrator proposals and durable side effects.
+- A place to practice effect admission, denial, pause, approval, commit, and audit.
+
+## What Fermata is not
+
+- Not a hidden chain-of-thought transcript format.
+- Not a general-purpose replacement for Python, Elixir, Rust, or TypeScript.
+- Not an unrestricted autonomous action system.
+- Not an agent framework competing with LangGraph, AutoGen, Hermes, Claude, or similar orchestrators.
+
+Those systems may propose. Fermata decides whether proposed effects can become
+committed effects.
+
 ## Current v0 artifacts
 
 ```text
+CONTRIBUTING.md
+AGENTS.md
+.github/PULL_REQUEST_TEMPLATE.md
 docs/
   charter-v0.md
   runtime-contract-authoring-model.md
@@ -56,7 +76,7 @@ src/
     governed_effects.py
 ```
 
-## State model
+## Runtime state model
 
 ```text
 Proposal
@@ -68,6 +88,16 @@ Proposal
 ```
 
 with first-class `Rejected` and `Paused` outcomes.
+
+For the v0 file-write adapter, denial paths are part of the proof:
+
+- non-intent proposals are rejected before adapter work;
+- malformed content is rejected before adapter work;
+- path escapes are rejected before adapter work;
+- missing capability is rejected before adapter work;
+- directory targets are rejected before adapter work;
+- adapter filesystem errors return governed rejection records;
+- approval-required writes pause without touching the target.
 
 ## Definition of committed
 
@@ -84,7 +114,7 @@ bytes written
 + trace records actor, scope, adapter, target, ack/evidence
 ```
 
-## Run the checks
+## Quickstart
 
 The v0 runtime code uses only the Python standard library. The schema-validating
 golden checks use the `dev` extra.
@@ -102,10 +132,16 @@ Expected final status:
 {"status": "passed"}
 ```
 
+To see the file-write adapter evidence directly:
+
+```bash
+python3 scripts/governed_effect_file_write_spike.py
+```
+
 ## Try the public speech parser
 
 ```bash
-python3 scripts/parse_tongue_line.py   'boundary cannot commit effect:file.write reason:approval_missing offer:dry_run'
+python3 scripts/parse_tongue_line.py 'boundary cannot commit effect:file.write reason:approval_missing offer:dry_run'
 ```
 
 ## Render seed corpus examples
@@ -114,12 +150,22 @@ python3 scripts/parse_tongue_line.py   'boundary cannot commit effect:file.write
 python3 scripts/render_tongue_record.py references/ai-native-tongue-seed-corpus-v0.jsonl --limit 6
 ```
 
-## Non-goals
+## Contributing
 
-- Not a hidden chain-of-thought transcript format.
-- Not a general-purpose replacement for Python, Elixir, Rust, or TypeScript.
-- Not an unrestricted autonomous action system.
-- Not an agent framework competing with LangGraph, AutoGen, Hermes, Claude, or similar orchestrators.
+Human and agent contributions are welcome when they preserve the core boundary:
+proposal is not commit. Start with:
 
-Those systems may propose. Fermata decides whether proposed effects can become
-committed effects.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for human/agent/model contribution protocol.
+- [AGENTS.md](AGENTS.md) for coding-agent operating rules.
+- [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) for review gates.
+
+Prefer small, boring patches with evidence. Keep syntax experiments subordinate to
+the runtime contract.
+
+## Near-term roadmap
+
+1. Harden the file adapter against adversarial filesystem races.
+2. Add a second adapter with the same proposal/intent/pause/reject/commit trace.
+3. Split human policy surface from agent utterance surface over the same IR.
+4. Expand golden traces into reusable katas for downstream runtimes.
+5. Compare Fermata examples against existing orchestration and policy-as-code tools.
