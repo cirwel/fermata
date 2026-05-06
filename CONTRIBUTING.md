@@ -1,7 +1,7 @@
 # Contributing to Fermata
 
-**Created:** May 05, 2026  
-**Last Updated:** May 05, 2026  
+**Created:** May 05, 2026
+**Last Updated:** May 06, 2026
 **Status:** Active
 
 ---
@@ -93,8 +93,13 @@ Models must not:
 - make Fermata depend on private chain-of-thought capture;
 - blur proposal, approval, and committed-effect states.
 
-If a secret appears in logs or source, redact it as `[REDACTED]` and rotate it
-outside the repo process if needed.
+If a real secret appears in logs or source, redact it as `[REDACTED]`, assume
+rotation is needed, and consider history cleanup before widening access.
+
+When sharing evidence, summarize and redact raw prompts, tool logs, API payloads,
+local machine details, personal data, proprietary endpoints, and any externally
+provided confidential material. Keep enough structure for review without turning
+the PR into a transcript dump.
 
 ## Handoff Packet Template
 
@@ -126,7 +131,7 @@ Out of scope:
 - [ ] Evidence gate: tests or explicit manual verification attached
 - [ ] Safety gate: no hidden chain-of-thought, no secrets, no widened authority
 - [ ] Review gate: spec and quality review complete for runtime changes
-- [ ] Commit gate: only intended files staged and pushed
+- [ ] SCM commit gate: only intended files staged and pushed
 ```
 
 ## Local Workflow
@@ -151,11 +156,11 @@ Out of scope:
 5. Stage only intended files:
 
    ```bash
-   git add CONTRIBUTING.md AGENTS.md .github/PULL_REQUEST_TEMPLATE.md
+   git add <intended paths>
    git diff --cached --name-only
    ```
 
-6. Use conventional commit messages:
+6. Use conventional Git commit messages:
 
    ```text
    docs: clarify agent contribution protocol
@@ -182,6 +187,10 @@ minimum, verify:
 - path escape is rejected before adapter commit;
 - missing capability is rejected before adapter commit;
 - approval-required write pauses without touching the target.
+
+When this guide says **Git commit** or **SCM commit**, it means a version-control
+commit. When Fermata says **committed effect**, it means the runtime state reached
+after a governed adapter acknowledgement and verification.
 
 ## Review Gates
 

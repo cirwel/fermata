@@ -1,7 +1,7 @@
 # Agent Instructions for Fermata
 
-**Created:** May 05, 2026  
-**Last Updated:** May 05, 2026  
+**Created:** May 05, 2026
+**Last Updated:** May 06, 2026
 **Status:** Active
 
 ---

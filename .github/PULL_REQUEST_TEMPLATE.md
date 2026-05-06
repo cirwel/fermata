@@ -1,6 +1,6 @@
 ## Summary
 
-- 
+- <what changed and why>
 
 ## Contribution Type
 
@@ -23,6 +23,8 @@
 
 > Do not include hidden chain-of-thought. Use structured rationale, assumptions,
 > evidence, decisions, and doubts instead.
+> Summarize and redact raw prompts, tool logs, API payloads, local machine
+> details, personal data, proprietary endpoints, and confidential material.
 
 ## Governed-Effect Boundary Check
 
@@ -41,4 +43,4 @@
 
 ## Notes for Reviewer
 
-- 
+- <review notes or open questions>
