@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cirwel.local/schemas/governed-effect-ir-v0.schema.json",
+  "$id": "https://raw.githubusercontent.com/CIRWEL/fermata/main/references/governed-effect-ir-v0.schema.json",
   "title": "Governed Effect IR v0",
   "description": "Canonical records for a governed-effect runtime: agents may propose; only governed effects may commit.",
   "oneOf": [
