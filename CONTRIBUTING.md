@@ -186,7 +186,9 @@ minimum, verify:
 - allowed file write commits with read-back evidence;
 - path escape is rejected before adapter commit;
 - missing capability is rejected before adapter commit;
-- approval-required write pauses without touching the target.
+- approval-required write pauses without touching the target;
+- each new adapter defines `committed` before implementation;
+- each new adapter has at least one allowed commit and three denial/pause cases.
 
 When this guide says **Git commit** or **SCM commit**, it means a version-control
 commit. When Fermata says **committed effect**, it means the runtime state reached

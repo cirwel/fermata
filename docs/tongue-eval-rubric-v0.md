@@ -39,13 +39,27 @@ They cover:
    - allowed write commits;
    - path escape rejected before adapter call;
    - missing capability rejected before adapter call;
+   - spoofed/mismatched operation capability rejected before adapter call;
    - approval-required write pauses before commit.
+4. Memory-write adapter cases for:
+   - allowed local memory write commits with ID/version/read-back evidence;
+   - malformed memory content rejected before adapter work;
+   - malformed memory lifespan rejected before adapter work;
+   - missing `memory.write` capability rejected before adapter call;
+   - spoofed/mismatched operation capability rejected before adapter call;
+   - approval-required memory writes pause before touching the ledger;
+   - empty, dot, traversal, and reserved `.jsonl` memory targets are rejected before adapter call;
+   - logical targets with and without file suffixes map to distinct ledgers;
+   - malformed existing ledgers reject before append;
+   - malformed existing ledger records reject before append;
+   - tampered existing memory record hashes reject before append;
+   - oversized serialized memory records reject before append.
 
 Run them with:
 
 ```bash
 python3 -m pip install -e '.[dev]'
-python3 scripts/run_tongue_golden_tests.py
+fermata-golden-checks
 ```
 
 ## Machine Checks
@@ -77,6 +91,22 @@ Passes if:
 - emitted effect and trace records validate against the canonical JSON Schema;
 - denied/paused states do not call the adapter commit function;
 - trace includes state transitions;
+- local filesystem side effects occur only under a temp sandbox.
+
+### Local memory-write adapter
+
+Passes if:
+
+- `CommittedEffect` requires a local ledger acknowledgement, record ID, version,
+  and read-back verification;
+- emitted effect and trace records validate against the canonical JSON Schema;
+- denied/paused states do not append to the memory ledger;
+- ambiguous, traversal, or colliding logical targets are rejected or kept distinct;
+- malformed existing ledgers are rejected before any append;
+- malformed existing ledger records are rejected before any append;
+- tampered existing memory record hashes are rejected before any append;
+- serialized memory records respect the scoped byte budget;
+- provenance is treated as public evidence metadata, not hidden reasoning;
 - local filesystem side effects occur only under a temp sandbox.
 
 ## Human Taste Rubric
