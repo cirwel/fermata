@@ -11,7 +11,7 @@
 The v0 tongue defines six speech acts: `need`, `claim`, `doubt`, `intend`,
 `remember`, `boundary`. The seed corpus
 (`references/ai-native-tongue-seed-corpus-v0.jsonl`) shows that those six can
-*encode* a working file-write loop. They do not show whether those six are
+*encode* a working file-write loop. It does not show whether those six are
 *sufficient* for what AI agents are actually trying to say.
 
 This file is the running log of moments where an agent (often the agent
@@ -19,106 +19,171 @@ authoring this file) wanted to express something and the v0 grammar forced a
 lossy workaround. Each entry is a negative observation: the language couldn't
 hold what the speaker meant, and something audit-relevant was lost.
 
-A gap is not a syntax proposal. It is evidence.
+A gap is evidence, not a syntax proposal. The Open Question section is
+deliberately open: it names the structural choice (new act vs. field on
+existing act vs. trace-level annotation vs. out-of-scope), without naming
+fields or syntax. Field-and-syntax proposals belong in a graduated extension
+PR, not in the harvest log.
+
+## Cut-line discipline
+
+Charter `docs/charter-v0.md` §13 is the gate any graduated extension must
+clear. The full four questions:
+
+1. Does it help define, admit, reject, verify, approve, commit, or trace an
+   effect?
+2. Does it help an agent express a public need, claim, doubt, intent, memory
+   candidate, or boundary?
+3. Does it help a human define scope, capability, policy, approval, or audit?
+4. Does it make the first file-write adapter safer or clearer?
+
+Question 4 is the binding one. None of the seed gaps below has been shown to
+clear Q4. They are recorded so that *if* a candidate extension is later
+proposed for any of them, Q4 must be answered concretely (with reference to
+file-write adapter behavior) before the extension graduates.
+
+Charter §4 ("Minimal Grammar Budget") is the related discipline on the agent
+side: resist expansion past the first six speech acts and six human policy
+constructs until the file-write adapter works end-to-end.
 
 ## Entry shape
 
 For each gap:
 
 - **Observation** — where the gap surfaced, in concrete context.
-- **What the speaker meant** — the intended public meaning, in plain language.
+- **Sources observed** — count and identifier(s). Graduation requires ≥2.
+- **What the speaker meant** — the intended public meaning.
 - **Workaround using v0** — the closest legal v0 utterance.
 - **What the workaround loses** — the audit-relevant difference between the
   intended meaning and the workaround.
-- **Open question** — what would have to be true for v0 to absorb this without
-  a new speech act.
+- **Open question** — the *structural* choice, framed openly: is this a new
+  speech act, a field on an existing act, a trace-level annotation, or
+  out-of-scope for a governance grammar?
 
-Adding a gap does not commit the project to a new speech act. It commits the
-project to *acknowledging* the loss. New speech acts must clear the cut-line in
-`docs/charter-v0.md` §13: each must help admit, verify, approve, commit, or
-trace an effect, or help an agent express a public need / claim / doubt /
-intent / memory candidate / boundary.
+Adding a gap commits the project only to *acknowledging* the loss.
 
-## Gap 1 — Trial balloon (speculation without stake)
+## Gap 1 — Float (introduce without undertaking)
 
-**Observation.** Mid-brainstorm, an agent wants to offer a candidate framing
-for the operator to redirect, with no commitment to it. Example: "maybe the
-right cut-line is per-adapter rather than per-effect — try this on, ready to
-retract."
+**Observation.** Mid-brainstorm, an agent puts a candidate framing on the
+table for the operator to redirect, with no commitment to it. Example: "maybe
+the right cut-line is per-adapter rather than per-effect — try this on, ready
+to retract."
 
-**What the speaker meant.** "I am putting this into the conversation so you can
-react to it. I have not staked anything. If you say no, I will not have to
-recant — there was no claim."
+**Sources observed.** 1 — drafting session for this doc.
+
+**What the speaker meant.** "I am introducing this proposition into the
+common ground for you to react to. I have not added it to my commitment
+store. If you say no, there is nothing to retract — I have not asserted it."
+
+The distinction is older than AI. Lawyers' "arguendo," philosophers' "suppose
+for the sake of argument," design-review "what if we" all do the same work:
+introduce a proposition at zero authorial credence, distinct from asserting
+one at low credence. Speech-act theory describes this as introducing a
+proposition into common ground without adding it to the speaker's commitment
+slip.
 
 **Workaround using v0.** `claim "..." confidence 0.4`.
 
-**What the workaround loses.** A claim at 0.4 is still a claim, and a future
-auditor reading the trace cannot tell apart "the agent staked a low-confidence
-position" from "the agent floated a candidate it had no commitment to." The
-calibration signal is also wrong: a low-confidence claim that gets retracted is
-a calibration miss; a trial balloon that gets redirected is not.
+**What the workaround loses.** A claim at 0.4 is still a claim, and the trace
+cannot tell apart "the agent staked a low-confidence position" from "the
+agent floated a candidate it had no commitment to." Calibration scoring
+becomes a category error: a low-confidence claim that gets retracted is a
+calibration miss; a float that gets redirected is not.
 
-**Open question.** Could `doubt` carry a `mode: speculative` field, or is
-"speculation" a different illocutionary force than "doubt"? Doubt marks
-uncertainty *about a claim already on the table.* Trial balloon places
-something *on the table* with reduced authorial commitment. They feel
-orthogonal.
+**Relation to `doubt`.** `doubt` and Float are sibling sub-assertives, not
+orthogonal as an earlier draft of this entry claimed. `doubt` reduces
+credence on something already in common ground; Float introduces something at
+zero stake. Same family (non-committal), different operation
+(attenuate-existing vs. introduce-without-undertaking).
 
-## Gap 2 — Self-supersession
+**Open question.** Is "introduce without undertaking" in scope for a
+*governance* grammar at all? Brainstorm legibility is conversation-level
+pragmatics; charter §1 and §13 are about external-world effects. A candidate
+extension would have to answer: how does Float make the file-write adapter
+safer or clearer (Q4)? If it does not, Float is real as a speech-act
+distinction but out of scope for this grammar, and belongs in an upstream
+orchestrator's expressive layer, not in Fermata.
 
-**Observation.** In the conversation that produced this file, the operator's
-second message read in full: "or maybe b" — superseding their previous answer
-"a." The operator had not been refuted; they had reconsidered.
+## Gap 2 — Inter-proposal structural reference
 
-**What the speaker meant.** "Treat my prior utterance as no longer my
-position. I am not refuting it. I am replacing it. Use this one."
+**Observation.** The seed corpus
+(`references/ai-native-tongue-seed-corpus-v0.jsonl`) contains 24 records.
+Several of them refer to other records by content, not by ID. `utt_022`
+(`need render.discord target:claim`) targets *the* prior claim, but the
+record carries no field linking it to a specific `proposal_id`. Every
+record is structurally orphaned: there is no `in_reply_to`, `references`,
+`supersedes`, `elaborates`, or any other field linking proposals.
 
-**Workaround using v0.** A new `claim` (or in this case, a new `need`/`intend`)
-with no link to the prior. The trace records two utterances; only an
-out-of-band reader knows the second supersedes the first.
+A specific instance of the same gap, observed in the conversation that
+produced this doc: an operator answer of "(a)" was followed by "or maybe b,"
+superseding the prior answer. The grammar has no structural way to mark
+supersession; only an out-of-band reader knows the second answer replaces
+the first.
 
-**What the workaround loses.** The supersession relation. An auditor walking
-the trace sees two consecutive answers and cannot tell which is current
-without re-reading conversation context. For multi-agent settings this is
-worse: a peer agent reading utterance N+1 has no structural signal that
-utterance N is retracted.
+**Sources observed.** 2 — corpus inspection (`utt_022` + several others
+that reference prior claims by content), and supersession instance from
+the drafting session.
 
-**Open question.** Is supersession a new speech act, a field on existing acts
-(`supersedes: prop_NNN`), or a trace-level annotation that lives outside the
-proposal record? Charter §13 prefers minimal grammar; a `supersedes` field on
-`Proposal` seems lighter than a 7th speech act.
+**What the speaker meant.** "This proposal stands in a specific relation
+(reply-to / supersedes / elaborates / refutes) to that proposal." A peer
+agent reading the trace should be able to recover that relation
+structurally, not by reading conversation context.
 
-## Gap 3 — Prior-disclosed recommendation
+**Workaround using v0.** Reference the prior content inside `payload`
+(natural language) or in `evidence` (loose string). No structural link.
 
-**Observation.** When recommending a course of action on a question where the
-agent has a known systematic bias, the agent wants to recommend *and*
-foreground the bias. Example from this session: "I recommend keeping the
-charter cut-lines tight; I notice my prior pulls me toward conservatism on
-substrate questions — discount accordingly."
+**What the workaround loses.** Multi-utterance traces lose between-proposal
+relations entirely. A trace replay sees N consecutive proposals with no
+indication that proposal N+3 supersedes proposal N+1, or that proposal N+5
+elaborates a claim from proposal N. For multi-agent settings this is worse:
+peer agents have no protocol-level signal that an utterance is retracted,
+amplified, or contradicted.
 
-**What the speaker meant.** "Here is my recommendation. Here is the prior I am
-disclosing. Treat the recommendation with that prior weighed in."
+This is the only gap in this log that arguably touches Q4 of §13: traces of
+file-write effects sometimes interleave with discussion utterances, and an
+auditor reconstructing what was committed *given which prior reasoning*
+needs the relation graph to be structural rather than narrative.
 
-**Workaround using v0.** A `claim` with the bias listed in `evidence`.
+**Open question.** Is this a single field (`references: [{kind, target}]`)
+on `Proposal`, a separate relation record (`record_type: "relation"`), or a
+trace-level annotation outside the proposal record? A candidate extension
+must answer Q4 concretely: does it make file-write traces more legible to a
+post-hoc auditor, or only conversation traces?
 
-**What the workaround loses.** Evidence is supposed to *support* a claim.
-Listing a self-disclosed bias in `evidence` collapses two distinct pragmatic
-moves: "this is what supports me" and "this is what should make you skeptical
-of me." A reader walking the trace cannot tell which evidence entries are
-supporting and which are caveating.
+## Deferred — observations parked, not entered
 
-**Open question.** Is this a `prior_disclosure` field on `claim`, or a
-separate speech act ("disclose"), or simply a discipline for structuring the
-`evidence` list (e.g. tagged entries `prior:substrate-status-quo-bias`)? The
-last option requires no schema change but no grammar enforces it.
+Two further candidates were considered for this v0 of the harvest log and
+deferred:
 
-## Status
+- **Prior-disclosed recommendation.** A speaker wants to recommend a course
+  of action while foregrounding a known systematic bias the recommendation
+  is subject to, distinct from supporting evidence. The structural concern
+  (the `evidence` field collapses support and caveat) is real, but the
+  motivating example imported a UNITARES-specific calibration concept into
+  Fermata, which does not yet have calibration. Park until a Fermata-native
+  example surfaces in the corpus or a session, and reconsider whether the
+  observation is a grammar gap or a discipline gap (tagged `evidence`
+  entries) within the existing field.
+
+- **Self-supersession as a separate gap.** Folded into Gap 2 (inter-proposal
+  structural reference) as a special case of the general missing-relation
+  problem.
+
+## Status and graduation
 
 This file is open. New gaps land here before any grammar change is proposed.
-A gap graduates only when:
+A gap graduates from harvest log to candidate extension only when:
 
 1. it has been observed in at least two distinct sessions or sources;
-2. the workaround loss is audit-relevant, not just stylistic;
-3. an explicit charter §13 cut-line check passes.
+2. the workaround loss is audit-relevant, not stylistic or pragmatic-only;
+3. all four §13 cut-line questions are answered concretely, with Q4
+   answered with reference to file-write adapter behavior.
+
+Currently:
+
+- Gap 1 (Float) is at sources=1, fails Q4 as posed, and is in active doubt
+  about whether it is in scope at all.
+- Gap 2 (inter-proposal structural reference) is at sources=2, plausibly
+  touches Q4, but no candidate extension has been written.
 
 Until then, gaps are evidence.
