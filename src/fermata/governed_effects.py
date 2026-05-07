@@ -309,6 +309,37 @@ def evaluate_file_write(
             sandbox_root=str(scope.sandbox_root),
         ), trace
 
+    raw_target = Path(intent.target)
+    candidate_path = (
+        raw_target if raw_target.is_absolute() else scope.sandbox_root / raw_target
+    )
+    sandbox_root_resolved = scope.sandbox_root.resolve()
+    walker = candidate_path
+    visited: set[Path] = set()
+    while walker not in visited:
+        visited.add(walker)
+        if walker.is_symlink():
+            reason = (
+                "target_is_symlink"
+                if walker == candidate_path
+                else "path_component_is_symlink"
+            )
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                reason,
+                symlink_path=str(walker),
+            ), trace
+        if walker == walker.parent:
+            break
+        walker = walker.parent
+        try:
+            if walker.resolve() == sandbox_root_resolved:
+                break
+        except OSError:
+            break
+
     content = intent.input.get("content")
     if not isinstance(content, str):
         return reject(
@@ -335,6 +366,16 @@ def evaluate_file_write(
             scope,
             intent.intent_id,
             "target_is_directory",
+            target=str(target_path),
+        ), trace
+
+    overwrite_requested = bool(intent.input.get("overwrite"))
+    if target_path.exists() and not target_path.is_dir() and not overwrite_requested:
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "target_exists_no_overwrite",
             target=str(target_path),
         ), trace
 
@@ -397,28 +438,62 @@ def evaluate_file_write(
             error_type=exc.__class__.__name__,
         ), trace
 
-    output_hash = sha256_bytes(readback)
-    if output_hash != input_hash:
+    try:
+        parent_fd = os.open(target_path.parent, os.O_DIRECTORY)
+    except OSError:
+        pass
+    else:
+        try:
+            os.fsync(parent_fd)
+        except OSError:
+            pass
+        finally:
+            os.close(parent_fd)
+
+    try:
+        final_bytes = target_path.read_bytes()
+    except OSError as exc:
+        trace.add(
+            "verification.failed",
+            error_type=exc.__class__.__name__,
+            target=str(target_path),
+        )
         return reject(
             trace,
             scope,
             intent.intent_id,
-            "read_back_hash_mismatch",
+            "verification_read_failed",
+            error_type=exc.__class__.__name__,
+        ), trace
+
+    final_hash = sha256_bytes(final_bytes)
+    if final_hash != input_hash:
+        trace.add(
+            "verification.failed",
+            target=str(target_path),
             input_sha256=input_hash,
-            output_sha256=output_hash,
+            target_sha256=final_hash,
+        )
+        return reject(
+            trace,
+            scope,
+            intent.intent_id,
+            "verification_failed_post_commit",
+            input_sha256=input_hash,
+            target_sha256=final_hash,
         ), trace
 
     ack = {
         "adapter": "file",
         "target": str(target_path),
         "handle": str(target_path),
-        "sha256": output_hash,
-        "bytes": len(readback),
+        "sha256": final_hash,
+        "bytes": len(final_bytes),
     }
     verification = {
         "status": "verified",
-        "method": "read_back_sha256",
-        "detail": {"sha256": output_hash, "bytes": len(readback)},
+        "method": "post_rename_read_back_sha256",
+        "detail": {"sha256": final_hash, "bytes": len(final_bytes)},
     }
     committed_at = now_timestamp()
     trace.add(
@@ -1224,6 +1299,94 @@ def run_self_tests() -> dict[str, Any]:
         assert not (root / "needs-approval.txt").exists()
         results["approval_required_pauses"] = paused.to_record()
         results["approval_required_trace"] = paused_trace.to_record()
+
+        symlink_target = root / "symlink-at-target.txt"
+        symlink_decoy = root / "decoy-target.txt"
+        symlink_decoy.write_text("decoy")
+        os.symlink(symlink_decoy, symlink_target)
+        symlink_at_target, symlink_at_target_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            sample_proposal("symlink-at-target.txt"),
+            approval_granted=True,
+        )
+        assert symlink_at_target.state == EffectState.REJECTED
+        assert symlink_at_target.rejection_reason == "target_is_symlink"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in symlink_at_target_trace.events
+        ]
+        assert symlink_decoy.read_text() == "decoy"
+        results["target_is_symlink_rejected"] = symlink_at_target.to_record()
+        results["target_is_symlink_trace"] = symlink_at_target_trace.to_record()
+
+        symlink_dir_real = root / "real-subdir"
+        symlink_dir_real.mkdir()
+        symlink_dir_alias = root / "aliased-subdir"
+        os.symlink(symlink_dir_real, symlink_dir_alias)
+        path_component_link, path_component_link_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            sample_proposal("aliased-subdir/inside.txt"),
+            approval_granted=True,
+        )
+        assert path_component_link.state == EffectState.REJECTED
+        assert path_component_link.rejection_reason == "path_component_is_symlink"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in path_component_link_trace.events
+        ]
+        assert not (symlink_dir_real / "inside.txt").exists()
+        results["path_component_is_symlink_rejected"] = path_component_link.to_record()
+        results["path_component_is_symlink_trace"] = path_component_link_trace.to_record()
+
+        existing_target = root / "existing-target.txt"
+        existing_target.write_text("original content\n")
+        original_bytes = existing_target.read_bytes()
+        no_overwrite, no_overwrite_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            sample_proposal("existing-target.txt"),
+            approval_granted=True,
+        )
+        assert no_overwrite.state == EffectState.REJECTED
+        assert no_overwrite.rejection_reason == "target_exists_no_overwrite"
+        assert "adapter.commit.started" not in [
+            event["type"] for event in no_overwrite_trace.events
+        ]
+        assert existing_target.read_bytes() == original_bytes
+        results["target_exists_no_overwrite_rejected"] = no_overwrite.to_record()
+        results["target_exists_no_overwrite_trace"] = no_overwrite_trace.to_record()
+
+        overwrite_proposal = sample_proposal("existing-target.txt")
+        assert overwrite_proposal.intent is not None
+        overwrite_proposal = Proposal(
+            proposal_id=overwrite_proposal.proposal_id,
+            actor=overwrite_proposal.actor,
+            speech_act=overwrite_proposal.speech_act,
+            reason=overwrite_proposal.reason,
+            confidence=overwrite_proposal.confidence,
+            evidence=overwrite_proposal.evidence,
+            intent=Intent(
+                intent_id=overwrite_proposal.intent.intent_id,
+                proposal_id=overwrite_proposal.intent.proposal_id,
+                adapter=overwrite_proposal.intent.adapter,
+                operation=overwrite_proposal.intent.operation,
+                target=overwrite_proposal.intent.target,
+                input={**overwrite_proposal.intent.input, "overwrite": True},
+                required_capability=overwrite_proposal.intent.required_capability,
+            ),
+        )
+        overwrote, overwrote_trace = evaluate_file_write(
+            sample_scope(root, approval_required=False),
+            overwrite_proposal,
+            approval_granted=True,
+        )
+        assert overwrote.state == EffectState.COMMITTED
+        assert overwrote.acknowledgement is not None
+        assert existing_target.read_text(encoding="utf-8") == (
+            "Agents may propose; only governed effects may commit.\n"
+        )
+        assert "effect.committed" in [
+            event["type"] for event in overwrote_trace.events
+        ]
+        results["target_exists_with_overwrite_commits"] = overwrote.to_record()
+        results["target_exists_with_overwrite_trace"] = overwrote_trace.to_record()
 
         memory_committed, memory_committed_trace = evaluate_memory_write(
             sample_memory_scope(root, approval_required=True),

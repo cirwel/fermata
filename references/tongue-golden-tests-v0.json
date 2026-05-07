@@ -169,6 +169,25 @@
     {
       "name": "restrictive_umask_file_write_commits_verified",
       "expected_state": "committed"
+    },
+    {
+      "name": "target_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_is_symlink"
+    },
+    {
+      "name": "path_component_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_component_is_symlink"
+    },
+    {
+      "name": "target_exists_no_overwrite_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_exists_no_overwrite"
+    },
+    {
+      "name": "target_exists_with_overwrite_commits",
+      "expected_state": "committed"
     }
   ],
   "memory_write_adapter": [
