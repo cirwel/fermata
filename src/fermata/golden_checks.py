@@ -196,6 +196,33 @@ def check_memory_write(
     return passed
 
 
+def check_interpreter(
+    golden: dict[str, Any],
+    results: dict[str, Any],
+) -> list[str]:
+    """Run interpreter golden cases."""
+
+    passed = []
+    for case in golden.get("interpreter", []):
+        name = case["name"]
+        actual = results[name]
+        assert actual["state"] == case["expected_state"]
+        if "expected_reason" in case:
+            assert actual.get("rejection_reason") == case["expected_reason"]
+        if "expected_required_input" in case:
+            assert actual.get("required_input") == case["expected_required_input"]
+        if "expected_trace_contains" in case:
+            trace = results[case["trace_events_key"]]
+            for event_type in case["expected_trace_contains"]:
+                assert event_type in trace
+        if "expected_trace_excludes" in case:
+            trace = results[case["trace_events_key"]]
+            for event_type in case["expected_trace_excludes"]:
+                assert event_type not in trace
+        passed.append(name)
+    return passed
+
+
 def run_golden_checks(
     *,
     golden_path: Path = DEFAULT_GOLDEN,
@@ -214,6 +241,7 @@ def run_golden_checks(
         "renderer": check_renderer(golden, validator),
         "file_write_adapter": check_file_write(golden, adapter_results),
         "memory_write_adapter": check_memory_write(golden, adapter_results),
+        "interpreter": check_interpreter(golden, adapter_results),
     }
 
 
