@@ -235,8 +235,16 @@ def evaluate_file_write(
     proposal: Proposal,
     *,
     approval_granted: bool = False,
+    _stop_at_approval: bool = False,
 ) -> tuple[EffectResult, Trace]:
-    """Evaluate one governed file-write proposal end to end."""
+    """Evaluate one governed file-write proposal end to end.
+
+    When ``_stop_at_approval`` is True, the evaluator runs pure admission,
+    verification, and approval phases and stops before any adapter commit —
+    returning an ``EffectState.APPROVED`` result whose trace ends at
+    ``approval.granted``. The filesystem is never touched. Used by
+    ``interpret`` to expose the state-machine spine without world effects.
+    """
 
     trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
     trace.add(
@@ -402,6 +410,16 @@ def evaluate_file_write(
         ), trace
 
     trace.add("approval.granted", authority="human" if approval_granted else "runtime")
+
+    if _stop_at_approval:
+        return EffectResult(
+            state=EffectState.APPROVED,
+            trace_id=trace.trace_id,
+            effect_id=f"effect_{uuid.uuid4().hex[:8]}",
+            intent_id=intent.intent_id,
+            scope_id=scope.scope_id,
+        ), trace
+
     trace.add("adapter.commit.started", adapter="file", target=str(target_path))
 
     temp_path: Path | None = None
@@ -608,6 +626,7 @@ def evaluate_memory_write(
     proposal: Proposal,
     *,
     approval_granted: bool = False,
+    _stop_at_approval: bool = False,
 ) -> tuple[EffectResult, Trace]:
     """Evaluate one governed local memory-write proposal end to end.
 
@@ -615,6 +634,12 @@ def evaluate_memory_write(
     JSONL record under the scope sandbox, then reads the record back by ID and
     version. A committed memory write means the local memory ledger contains the
     proposed record and the runtime verified its SHA-256 evidence.
+
+    When ``_stop_at_approval`` is True, the evaluator runs pure admission,
+    verification, and approval phases and stops before any adapter commit —
+    returning an ``EffectState.APPROVED`` result whose trace ends at
+    ``approval.granted``. The memory ledger is never written. Used by
+    ``interpret`` to expose the state-machine spine without world effects.
     """
 
     trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
@@ -812,6 +837,15 @@ def evaluate_memory_write(
 
     trace.add("approval.granted", authority="human" if approval_granted else "runtime")
 
+    if _stop_at_approval:
+        return EffectResult(
+            state=EffectState.APPROVED,
+            trace_id=trace.trace_id,
+            effect_id=f"effect_{uuid.uuid4().hex[:8]}",
+            intent_id=intent.intent_id,
+            scope_id=scope.scope_id,
+        ), trace
+
     trace.add("adapter.commit.started", adapter="memory", target=intent.target)
 
     candidate_records = [*existing_records, memory_record]
@@ -920,6 +954,86 @@ def evaluate_memory_write(
         acknowledgement=ack,
         verification=verification,
         committed_at=committed_at,
+    ), trace
+
+
+def interpret(
+    scope: Scope,
+    proposal: Proposal,
+    *,
+    approval_granted: bool = False,
+) -> tuple[EffectResult, Trace]:
+    """Run a proposal through the governed-effect state machine without committing.
+
+    Returns an ``EffectResult`` in one of three terminal-for-pure-eval states:
+
+    - ``REJECTED`` — the proposal failed admission, verification, or shape checks;
+    - ``PAUSED`` — the proposal reached approval but approval was required and not
+      granted; the runtime needs human input before proceeding;
+    - ``APPROVED`` — the proposal cleared all pure-eval phases and would commit on
+      the next call to a real adapter; no external effect has occurred.
+
+    No adapter commit is performed. No file is written, no memory ledger is
+    appended, no network is called. The trace stops at ``approval.granted`` (or
+    earlier on rejection / pause). To actually commit, call the public
+    adapter-specific entry point (``evaluate_file_write``, ``evaluate_memory_write``)
+    with ``approval_granted=True``.
+
+    The interpreter dispatches by ``intent.adapter``. Unsupported adapters are
+    rejected with reason ``unsupported_adapter_for_interpret``; this is distinct
+    from ``unsupported_adapter_operation`` returned by adapter-specific evaluators
+    when called with the wrong adapter.
+    """
+
+    if proposal.speech_act != "intend" or proposal.intent is None:
+        trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
+        trace.add(
+            "proposal.received",
+            proposal_id=proposal.proposal_id,
+            actor=proposal.actor,
+            speech_act=proposal.speech_act,
+            confidence=proposal.confidence,
+        )
+        return reject(trace, scope, None, "proposal_is_not_an_intent"), trace
+
+    intent = proposal.intent
+    if intent.adapter == "file" and intent.operation == "write":
+        return evaluate_file_write(
+            scope,
+            proposal,
+            approval_granted=approval_granted,
+            _stop_at_approval=True,
+        )
+    if intent.adapter == "memory" and intent.operation == "write":
+        return evaluate_memory_write(
+            scope,
+            proposal,
+            approval_granted=approval_granted,
+            _stop_at_approval=True,
+        )
+
+    trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
+    trace.add(
+        "proposal.received",
+        proposal_id=proposal.proposal_id,
+        actor=proposal.actor,
+        speech_act=proposal.speech_act,
+        confidence=proposal.confidence,
+    )
+    trace.add(
+        "intent.created",
+        intent_id=intent.intent_id,
+        adapter=intent.adapter,
+        operation=intent.operation,
+        target=intent.target,
+    )
+    return reject(
+        trace,
+        scope,
+        intent.intent_id,
+        "unsupported_adapter_for_interpret",
+        adapter=intent.adapter,
+        operation=intent.operation,
     ), trace
 
 
@@ -1796,6 +1910,154 @@ def run_self_tests() -> dict[str, Any]:
         results["memory_distinct_targets_do_not_collide"] = suffix_target.to_record()
         results["memory_distinct_targets_first_trace"] = plain_trace.to_record()
         results["memory_distinct_targets_second_trace"] = suffix_trace.to_record()
+
+        interpret_target = root / "interpret-untouched.txt"
+        assert not interpret_target.exists()
+        interpret_file_approved, interpret_file_approved_trace = interpret(
+            sample_scope(root, approval_required=False),
+            sample_proposal("interpret-untouched.txt"),
+            approval_granted=True,
+        )
+        assert interpret_file_approved.state == EffectState.APPROVED
+        assert interpret_file_approved.acknowledgement is None
+        assert interpret_file_approved.committed_at is None
+        assert not interpret_target.exists()
+        approved_event_types = [
+            event["type"] for event in interpret_file_approved_trace.events
+        ]
+        assert "approval.granted" in approved_event_types
+        assert "adapter.commit.started" not in approved_event_types
+        assert "effect.committed" not in approved_event_types
+        results["interpret_file_write_approved_without_committing"] = (
+            interpret_file_approved.to_record()
+        )
+        results["interpret_file_write_approved_trace"] = (
+            interpret_file_approved_trace.to_record()
+        )
+        results["interpret_file_write_approved_trace_events"] = approved_event_types
+
+        interpret_pause_target = root / "interpret-pause.txt"
+        assert not interpret_pause_target.exists()
+        interpret_file_paused, interpret_file_paused_trace = interpret(
+            sample_scope(root, approval_required=True),
+            sample_proposal("interpret-pause.txt"),
+        )
+        assert interpret_file_paused.state == EffectState.PAUSED
+        assert interpret_file_paused.required_input == "human_approval"
+        assert not interpret_pause_target.exists()
+        paused_event_types = [
+            event["type"] for event in interpret_file_paused_trace.events
+        ]
+        assert "approval.requested" in paused_event_types
+        assert "adapter.commit.started" not in paused_event_types
+        results["interpret_file_write_paused_without_committing"] = (
+            interpret_file_paused.to_record()
+        )
+        results["interpret_file_write_paused_trace"] = (
+            interpret_file_paused_trace.to_record()
+        )
+
+        interpret_reject_target = root / ".." / "outside-interpret-scope.txt"
+        interpret_file_rejected, interpret_file_rejected_trace = interpret(
+            sample_scope(root, approval_required=False),
+            sample_proposal("../outside-interpret-scope.txt"),
+            approval_granted=True,
+        )
+        assert interpret_file_rejected.state == EffectState.REJECTED
+        assert interpret_file_rejected.rejection_reason == "path_outside_scope"
+        rejected_event_types = [
+            event["type"] for event in interpret_file_rejected_trace.events
+        ]
+        assert "adapter.commit.started" not in rejected_event_types
+        results["interpret_file_write_rejected"] = interpret_file_rejected.to_record()
+        results["interpret_file_write_rejected_trace"] = (
+            interpret_file_rejected_trace.to_record()
+        )
+
+        interpret_non_intent, interpret_non_intent_trace = interpret(
+            sample_scope(root, approval_required=False),
+            Proposal(
+                proposal_id="prop_interpret_non_intent_001",
+                actor="agent:hermes",
+                speech_act="claim",
+                reason="not an effect intent",
+                confidence=0.5,
+                evidence=[],
+            ),
+            approval_granted=True,
+        )
+        assert interpret_non_intent.state == EffectState.REJECTED
+        assert interpret_non_intent.rejection_reason == "proposal_is_not_an_intent"
+        non_intent_events = [
+            event["type"] for event in interpret_non_intent_trace.events
+        ]
+        assert "adapter.commit.started" not in non_intent_events
+        results["interpret_non_intent_rejected"] = interpret_non_intent.to_record()
+        results["interpret_non_intent_trace"] = interpret_non_intent_trace.to_record()
+
+        interpret_unknown_adapter_proposal = Proposal(
+            proposal_id="prop_interpret_unknown_adapter_001",
+            actor="agent:hermes",
+            speech_act="intend",
+            reason="unsupported adapter for interpret",
+            confidence=0.6,
+            evidence=[],
+            intent=Intent(
+                intent_id="intent_interpret_unknown_adapter_001",
+                proposal_id="prop_interpret_unknown_adapter_001",
+                adapter="network",
+                operation="post",
+                target="https://example.invalid/",
+                input={"body": ""},
+                required_capability="network.post",
+            ),
+        )
+        interpret_unknown, interpret_unknown_trace = interpret(
+            sample_scope(root, approval_required=False),
+            interpret_unknown_adapter_proposal,
+            approval_granted=True,
+        )
+        assert interpret_unknown.state == EffectState.REJECTED
+        assert (
+            interpret_unknown.rejection_reason == "unsupported_adapter_for_interpret"
+        )
+        results["interpret_unsupported_adapter_rejected"] = (
+            interpret_unknown.to_record()
+        )
+        results["interpret_unsupported_adapter_trace"] = (
+            interpret_unknown_trace.to_record()
+        )
+
+        memory_ledger_root = root / ".fermata-memory"
+        memory_files_before = (
+            sorted(p.name for p in memory_ledger_root.glob("**/*.jsonl"))
+            if memory_ledger_root.exists()
+            else []
+        )
+        interpret_memory_approved, interpret_memory_approved_trace = interpret(
+            sample_memory_scope(root, approval_required=False),
+            sample_memory_proposal("project/interpret-only.txt"),
+            approval_granted=True,
+        )
+        assert interpret_memory_approved.state == EffectState.APPROVED
+        assert interpret_memory_approved.acknowledgement is None
+        memory_files_after = (
+            sorted(p.name for p in memory_ledger_root.glob("**/*.jsonl"))
+            if memory_ledger_root.exists()
+            else []
+        )
+        assert memory_files_after == memory_files_before
+        memory_approved_events = [
+            event["type"] for event in interpret_memory_approved_trace.events
+        ]
+        assert "approval.granted" in memory_approved_events
+        assert "adapter.commit.started" not in memory_approved_events
+        results["interpret_memory_write_approved_without_committing"] = (
+            interpret_memory_approved.to_record()
+        )
+        results["interpret_memory_write_approved_trace"] = (
+            interpret_memory_approved_trace.to_record()
+        )
 
     return results
 
