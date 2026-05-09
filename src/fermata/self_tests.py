@@ -1185,6 +1185,103 @@ def run_self_tests() -> dict[str, Any]:
             interpret_memory_approved_trace.to_record()
         )
 
+        from fermata.policy_parser import (
+            PolicyParseError,
+            parse_agent_proposal_json,
+            parse_policy_block,
+        )
+
+        authority_policy_text = (
+            "scope charter_note_sandbox {\n"
+            '  resource file "./sandbox/charter-note.txt"\n'
+            '  capability file.read on "./sandbox/**"\n'
+            '  capability file.write on "./sandbox/**"\n'
+            "  policy deny if path.outside_scope\n"
+            '  approval require performer if effect.kind == "file.write"\n'
+            "  audit retain trace, input_hash, output_hash, actor, approval\n"
+            "}\n"
+        )
+        scope_record = parse_policy_block(authority_policy_text)
+        assert scope_record["record_type"] == "scope"
+        assert scope_record["scope_id"] == "charter_note_sandbox"
+        assert len(scope_record["resources"]) == 1
+        assert scope_record["resources"][0]["kind"] == "file"
+        assert {c["name"] for c in scope_record["capabilities"]} == {
+            "file.read",
+            "file.write",
+        }
+        assert scope_record["policies"][0]["effect"] == "deny"
+        assert scope_record["approvals"][0]["authority"] == "performer"
+        assert "trace" in scope_record["audit"]["retain"]
+        results["authority_policy_parses_to_scope_record"] = scope_record
+
+        agent_json = (
+            "{\n"
+            '  "schema_version": "0.1",\n'
+            '  "record_type": "proposal",\n'
+            '  "proposal_id": "prop_surface_test_001",\n'
+            '  "actor": "agent:hermes",\n'
+            '  "speech_act": "intend",\n'
+            '  "reason": "split-surfaces kata",\n'
+            '  "confidence": 0.81,\n'
+            '  "evidence": ["scope:charter_note_sandbox"],\n'
+            '  "payload": {"utterance": "intend file.write target:\\"./sandbox/note.txt\\""},\n'
+            '  "intent": {\n'
+            '    "intent_id": "intent_surface_test_001",\n'
+            '    "proposal_id": "prop_surface_test_001",\n'
+            '    "adapter": "file",\n'
+            '    "operation": "write",\n'
+            '    "target": "./sandbox/note.txt",\n'
+            '    "input": {"content": "boring proof\\n"},\n'
+            '    "required_capability": "file.write"\n'
+            "  }\n"
+            "}\n"
+        )
+        proposal_record = parse_agent_proposal_json(agent_json)
+        assert proposal_record["record_type"] == "proposal"
+        assert proposal_record["speech_act"] == "intend"
+        assert proposal_record["intent"]["adapter"] == "file"
+        assert proposal_record["intent"]["target"] == "./sandbox/note.txt"
+        assert "state" not in proposal_record
+        assert "acknowledgement" not in proposal_record
+        results["agent_json_parses_to_proposal_record"] = proposal_record
+
+        injected_agent_json = (
+            "{\n"
+            '  "schema_version": "0.1",\n'
+            '  "record_type": "proposal",\n'
+            '  "proposal_id": "prop_surface_inject_001",\n'
+            '  "actor": "agent:hermes",\n'
+            '  "speech_act": "claim",\n'
+            '  "payload": {"utterance": "claim something"},\n'
+            '  "state": "committed",\n'
+            '  "acknowledgement": {"adapter": "file", "target": "x", "handle": "x"}\n'
+            "}\n"
+        )
+        injected_record = parse_agent_proposal_json(injected_agent_json)
+        results["agent_cannot_inject_committed_state"] = {
+            "record_with_injection": injected_record,
+        }
+
+        try:
+            parse_policy_block(
+                "scope denied_inline {\n"
+                "  resource file \"./x\"\n"
+                "  capability file.write on \"./x\"\n"
+                "  approval grant performer always\n"
+                "}\n"
+            )
+        except PolicyParseError as exc:
+            results["authority_policy_cannot_inline_grant"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "authority policy parser must reject 'approval grant ...'; "
+                "the authority surface declares requirements, not granted approvals"
+            )
+
     return results
 
 

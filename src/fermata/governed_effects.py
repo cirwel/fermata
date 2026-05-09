@@ -27,6 +27,11 @@ from fermata.memory_adapter import (
     sample_memory_scope,
     validate_memory_record,
 )
+from fermata.policy_parser import (
+    PolicyParseError,
+    parse_agent_proposal_json,
+    parse_policy_block,
+)
 from fermata.runtime_core import (
     append_trace_ledger,
     approved_result,
@@ -82,6 +87,7 @@ __all__ = [
     "MEMORY_LIFESPANS",
     "MEMORY_RECORD_STRING_FIELDS",
     "MemoryWriteAdapter",
+    "PolicyParseError",
     "Proposal",
     "RejectionReason",
     "Scope",
@@ -107,7 +113,9 @@ __all__ = [
     "normalize_target",
     "now_timestamp",
     "open_file_parent_fd",
+    "parse_agent_proposal_json",
     "parse_iso_timestamp",
+    "parse_policy_block",
     "pause",
     "reject",
     "run_self_tests",

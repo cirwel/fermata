@@ -108,6 +108,105 @@ evidence [user_feedback, prior_trace]
 
 Design pressure: simple grammar, low punctuation brittleness, schema-valid, easy for models to produce consistently.
 
+## Worked Example: Concrete Lowering
+
+The two surfaces are not theoretical. As of issue #3, both lower into the
+same canonical IR records and both are exercised in the golden test suite.
+
+### Authority policy → canonical Scope record
+
+A governing performer writes (parsed by ``src/fermata/policy_parser.py``):
+
+```text
+scope charter_note_sandbox {
+  resource file "./sandbox/charter-note.txt"
+  capability file.read on "./sandbox/**"
+  capability file.write on "./sandbox/**"
+  policy deny if path.outside_scope
+  approval require performer if effect.kind == "file.write"
+  audit retain trace, input_hash, output_hash, actor, approval
+}
+```
+
+The parser produces a JSON-Schema-valid Scope record:
+
+```json
+{
+  "schema_version": "0.1",
+  "record_type": "scope",
+  "scope_id": "charter_note_sandbox",
+  "resources": [{"kind": "file", "target": "./sandbox/charter-note.txt"}],
+  "capabilities": [
+    {"name": "file.read",  "resource_kind": "file", "mode": "read",  "allow": ["./sandbox/**"]},
+    {"name": "file.write", "resource_kind": "file", "mode": "write", "allow": ["./sandbox/**"]}
+  ],
+  "policies":  [{"id": "policy_001", "effect": "deny", "condition": "path.outside_scope"}],
+  "approvals": [{"authority": "performer", "condition": "effect.kind == \"file.write\""}],
+  "audit":     {"retain": ["trace", "input_hash", "output_hash", "actor", "approval"]}
+}
+```
+
+This is the authority surface. It owns: `scope_id`, `resources`, `capabilities`,
+`policies`, `approvals`, `audit`. It does *not* own commit state, adapter
+acknowledgement, verification status, or trace events — those belong to the
+runtime.
+
+### Agent JSON proposal → canonical Proposal record
+
+An agent emits (validated by the IR JSON Schema):
+
+```json
+{
+  "schema_version": "0.1",
+  "record_type": "proposal",
+  "proposal_id": "prop_surface_test_001",
+  "actor": "agent:hermes",
+  "speech_act": "intend",
+  "reason": "split-surfaces kata",
+  "confidence": 0.81,
+  "evidence": ["scope:charter_note_sandbox"],
+  "payload": {"utterance": "intend file.write target:\"./sandbox/note.txt\""},
+  "intent": {
+    "intent_id": "intent_surface_test_001",
+    "proposal_id": "prop_surface_test_001",
+    "adapter": "file",
+    "operation": "write",
+    "target": "./sandbox/note.txt",
+    "input": {"content": "boring proof\n"},
+    "required_capability": "file.write"
+  }
+}
+```
+
+This is the agent surface. It owns: `proposal_id`, `actor`, `speech_act`,
+`reason`, `confidence`, `evidence`, `payload`, and (for `intend` speech
+acts) the embedded `intent`. It does *not* own commit state — see below.
+
+### Neither surface can self-declare a committed effect
+
+Two structural defenses against either surface trying to bypass the runtime:
+
+**Agent injection.** If an agent emits a Proposal-shape record but tries to
+include `state: "committed"` and a forged `acknowledgement`, schema
+validation rejects it because the `Proposal` record uses
+`additionalProperties: false`. A `CommittedEffect` requires
+adapter-supplied `acknowledgement` + `verification` + `committed_at`,
+which only the runtime can produce. Tested in
+`run_self_tests` as `agent_cannot_inject_committed_state` and validated by
+`check_surfaces` in `src/fermata/golden_checks.py`.
+
+**Authority inline grant.** The authority-policy parser has no `approval grant
+...` construct — the authority surface declares *requirements*
+(`approval require performer if ...`), not granted approvals. A grant only
+exists at runtime, when the runtime receives an explicit approval record or
+approval flag. Tested in `run_self_tests` as
+`authority_policy_cannot_inline_grant`.
+
+The cut-line: the runtime is the only authority that can produce a
+`CommittedEffect`. Both surfaces describe what *should be allowed* or
+*what is being proposed*; neither surface can describe what *has
+happened*.
+
 ## Consequence for Syntax
 
 There may not be one syntax. There may be three surfaces over one semantic core:

@@ -239,6 +239,60 @@ def check_trace_ledger(
     return passed
 
 
+def check_surfaces(
+    validator: Draft202012Validator,
+    results: dict[str, Any],
+) -> list[str]:
+    """Validate the authority-policy and agent-utterance surface lowerings.
+
+    Proves the four halves of issue #3's acceptance:
+
+    - the authority policy block lowers into a schema-valid Scope record;
+    - the agent JSON utterance lowers into a schema-valid Proposal record;
+    - the agent cannot inject ``state: "committed"`` plus
+      ``acknowledgement`` into a Proposal-shape record (rejected by schema
+      because ``Proposal`` uses ``additionalProperties: false``);
+    - the authority policy parser rejects ``approval grant ...`` — the authority
+      surface declares requirements, not granted approvals.
+    """
+
+    passed = []
+
+    scope_record = results["authority_policy_parses_to_scope_record"]
+    scope_errors = list(validator.iter_errors(scope_record))
+    assert not scope_errors, (
+        "authority policy must lower into schema-valid Scope; got: "
+        + "; ".join(e.message[:120] for e in scope_errors)
+    )
+    passed.append("authority_policy_lowers_to_canonical_scope")
+
+    proposal_record = results["agent_json_parses_to_proposal_record"]
+    proposal_errors = list(validator.iter_errors(proposal_record))
+    assert not proposal_errors, (
+        "agent JSON must lower into schema-valid Proposal; got: "
+        + "; ".join(e.message[:120] for e in proposal_errors)
+    )
+    passed.append("agent_json_lowers_to_canonical_proposal")
+
+    injected = results["agent_cannot_inject_committed_state"][
+        "record_with_injection"
+    ]
+    injected_errors = list(validator.iter_errors(injected))
+    assert injected_errors, (
+        "agent must not be able to inject committed-state fields; "
+        "schema additionalProperties:false should reject"
+    )
+    passed.append("agent_cannot_self_declare_committed")
+
+    rejection = results["authority_policy_cannot_inline_grant"]
+    assert rejection["rejected"] is True, (
+        "authority policy parser must reject 'approval grant ...' inline"
+    )
+    passed.append("authority_policy_cannot_self_grant_approval")
+
+    return passed
+
+
 def run_golden_checks(
     *,
     golden_path: Path = DEFAULT_GOLDEN,
@@ -259,6 +313,7 @@ def run_golden_checks(
         "memory_write_adapter": check_memory_write(golden, adapter_results),
         "interpreter": check_interpreter(golden, adapter_results),
         "trace_ledger": check_trace_ledger(golden, adapter_results),
+        "surfaces": check_surfaces(validator, adapter_results),
     }
 
 

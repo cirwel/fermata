@@ -86,6 +86,7 @@ src/
     governed_effects.py
     interpreter.py
     memory_adapter.py
+    policy_parser.py
     runtime_core.py
     runtime_ir.py
     self_tests.py
