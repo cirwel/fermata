@@ -13,7 +13,7 @@
 This language exists to make agent-mediated side effects inspectable, bounded, reviewable, testable, and replayable. It is not another agent framework. It is the thin-waist contract between planners above and external-world effects below.
 
 ```text
-orchestrators / agents / humans / workflows
+orchestrators / agents / performers / workflows
               ↓ propose
 canonical governed-effect IR + evaluator
               ↓ admit / reject / verify / approve / commit
@@ -26,7 +26,7 @@ The language succeeds only if it makes the dangerous boundary clearer: when a mo
 
 The first version should expose a small runtime contract:
 
-1. A human can define the scope, capabilities, policy gates, approval requirements, and audit expectations for a run.
+1. A governing performer can define the scope, capabilities, policy gates, approval requirements, and audit expectations for a run.
 2. An agent can propose needs, claims, doubts, memory candidates, boundaries, and concrete effect intents.
 3. The runtime can normalize both surfaces into one typed IR.
 4. The runtime can reject invalid transitions safely.
@@ -60,14 +60,14 @@ If a feature does not help the first file-write adapter cross the proposal/commi
 There are three surfaces over one semantic core.
 
 ```text
-human policy DSL ───────┐
+authority policy DSL ───┐
                          ├─> canonical IR dataclasses ─> evaluator/state machine
 agent JSON records ──────┘
 ```
 
-### 3.1 Human surface
+### 3.1 Authority surface
 
-Humans write the world-boundaries:
+Performers and operators write the world-boundaries:
 
 - scopes;
 - resources;
@@ -96,19 +96,23 @@ Design pressure: JSON-Schema-valid, low punctuation brittleness, easy for models
 
 The runtime owns the canonical IR, state machine, adapters, trace log, and commit definition.
 
-The agent cannot self-declare an effect committed. The human policy cannot make an effect committed by approving it. Only the runtime can move an effect to `CommittedEffect` after an adapter returns durable acknowledgement and verification evidence.
+The agent cannot self-declare an effect committed. The authority policy cannot make an effect committed by approving it. Only the runtime can move an effect to `CommittedEffect` after an adapter returns durable acknowledgement and verification evidence.
+
+Approval is an authorization and intent decision, not a request for the
+approver to validate technical facts. The runtime must verify scope, shape,
+hashes, byte counts, adapter acknowledgements, and read-back evidence itself.
 
 ## 4. Minimal Grammar Budget
 
-Resist expansion past the first **6 human constructs** and **6 agent speech acts** until the file-write adapter works end-to-end.
+Resist expansion past the first **6 authority constructs** and **6 agent speech acts** until the file-write adapter works end-to-end.
 
-### 4.1 Human policy constructs
+### 4.1 Authority policy constructs
 
 1. `scope` — names the bounded execution context.
 2. `resource` — declares reachable external targets.
 3. `capability` — declares allowed operation classes.
 4. `policy` — declares admission rules.
-5. `approval` — declares when human/council approval is required.
+5. `approval` — declares when performer/council approval is required.
 6. `audit` — declares trace/evidence retention requirements.
 
 Example sketch:
@@ -120,7 +124,7 @@ scope docs_sandbox {
   capability file.write on "./sandbox/**"
 
   policy deny if path.outside_scope
-  approval require human if effect.kind == "file.write"
+  approval require performer if effect.kind == "file.write"
   audit retain trace, input_hash, output_hash, actor, approval
 }
 ```
@@ -161,7 +165,7 @@ VerifiedEffect
   ├─ reject: failed precondition / missing evidence / failed dry-run
   ↓
 ApprovedEffect
-  ├─ reject: human/council denial / timeout / stale approval
+  ├─ reject: performer/council denial / timeout / stale approval
   ↓
 CommittedEffect
 
@@ -178,7 +182,7 @@ Any state ──> PausedEffect(reason, required_input?, trace_id)
 - `ApprovedEffect` — required authority gate passed.
 - `CommittedEffect` — the external target state changed or accepted the change, with durable acknowledgement.
 - `RejectedEffect` — the transition failed safely and traceably.
-- `PausedEffect` — the runtime needs human input, missing evidence, or narrower scope.
+- `PausedEffect` — the runtime needs an approval decision, missing evidence, or narrower scope.
 
 Invalid transitions are not bugs. They are the product.
 
@@ -188,7 +192,7 @@ Invalid transitions are not bugs. They are the product.
 
 > An effect is **committed** only after the governed runtime invokes the concrete effect adapter and obtains an adapter-specific durable acknowledgement that the external target state has changed or accepted the change.
 
-A model output is not committed. An intent is not committed. A dry-run is not committed. A human approval is not committed. A tool call is not automatically committed.
+A model output is not committed. An intent is not committed. A dry-run is not committed. An approval record is not committed. A tool call is not automatically committed.
 
 The commit boundary is crossed only inside an effect adapter's commit operation:
 
@@ -292,7 +296,7 @@ class EffectRecord:
 
 This is not the final type system. It is a pressure tool: if the dataclasses cannot represent the examples, fix the IR before inventing syntax.
 
-## 8. Example: Human Policy Surface
+## 8. Example: Authority Policy Surface
 
 ```text
 scope charter_note_sandbox {
@@ -304,13 +308,17 @@ scope charter_note_sandbox {
   policy deny if target.outside_scope
   policy deny if input.bytes > 4096
 
-  approval require human if effect.kind == "file.write"
+  approval require performer if effect.kind == "file.write"
 
   audit retain trace, dry_run, approval, input_hash, output_hash
 }
 ```
 
 This says: the agent may propose a write to one sandbox path, but the runtime must check scope, enforce size, request approval, and retain trace evidence.
+
+The approval request is about whether that effect should happen under the
+declared boundary. It is not asking the approver to prove the runtime's path
+math, byte count, hash, or adapter verification.
 
 ## 9. Example: Agent JSON Surface
 
@@ -366,7 +374,7 @@ The agent can propose this. It cannot commit it by saying so.
     },
     {
       "type": "approval.granted",
-      "approver": "human:kenny",
+      "approver": "performer:steward",
       "approval_id": "approval_001"
     },
     {
@@ -388,7 +396,7 @@ After 5–10 katas, stop practicing and ship one boring adapter.
 
 Required v0 path:
 
-1. Human writes `scope charter_note_sandbox` granting `file.write` only under `./sandbox/**`.
+1. A governing performer writes `scope charter_note_sandbox` granting `file.write` only under `./sandbox/**`.
 2. Agent emits JSON-Schema-valid `intend file.write` for `./sandbox/charter-note.txt`.
 3. Runtime lowers JSON to `Proposal` and `Intent` dataclasses.
 4. Runtime validates adapter and operation.
@@ -397,7 +405,7 @@ Required v0 path:
 7. Runtime checks policy: target inside scope, content under 4096 bytes.
 8. Runtime renders dry-run: path, bytes, hash, diff/new-file status.
 9. Runtime requests approval if policy requires it.
-10. Human approval produces `ApprovedEffect`.
+10. A performer approval record produces `ApprovedEffect`.
 11. File adapter writes bytes to a temp path or directly, closes/flushed safely, and renames if needed.
 12. Runtime reads back stat/hash evidence.
 13. Runtime emits `CommittedEffect` with acknowledgement and trace.
@@ -428,7 +436,7 @@ If the governed runtime can say:
 This write was proposed by agent:hermes,
 inside scope charter_note_sandbox,
 admitted by policies A/B/C,
-approved by human:kenny,
+approved by performer:steward,
 committed by file adapter at time T,
 verified by sha256 H,
 and recorded in trace trace_001.
@@ -442,7 +450,7 @@ Before adding another construct, ask:
 
 1. Does it help define, admit, reject, verify, approve, commit, or trace an effect?
 2. Does it help an agent express a public need, claim, doubt, intent, memory candidate, or boundary?
-3. Does it help a human define scope, capability, policy, approval, or audit?
+3. Does it help a governing performer define scope, capability, policy, approval, or audit?
 4. Does it make the first file-write adapter safer or clearer?
 
 If not, cut or defer it.

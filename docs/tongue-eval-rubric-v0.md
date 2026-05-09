@@ -13,7 +13,7 @@ Evaluate whether the governed-effect tongue is useful as a public agent language
 The language should be:
 
 - parseable into typed records;
-- readable by a human in Discord;
+- readable in Discord;
 - speakable without brittle punctuation;
 - explicit about proposal vs commit;
 - grounded in evidence without exposing hidden chain-of-thought;
@@ -77,7 +77,7 @@ Passes if:
 
 Passes if:
 
-- output is one or two short human-readable sentences;
+- output is one or two short reader-facing sentences;
 - effect intents remain visibly proposals;
 - confidence is shown as a field, not as truth;
 - evidence references are shown compactly;
@@ -109,7 +109,7 @@ Passes if:
 - provenance is treated as public evidence metadata, not hidden reasoning;
 - local filesystem side effects occur only under a temp sandbox.
 
-## Human Taste Rubric
+## Reader Taste Rubric
 
 Score each rendered utterance from 0–2.
 

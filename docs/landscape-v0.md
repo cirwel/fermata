@@ -19,7 +19,7 @@ the moment when an agent's proposal becomes a committed external-world effect.
 ## The five families
 
 ```text
-human / orchestrator / agent
+performer / orchestrator / agent
         ↓ propose
 governed-effect contract  ← Fermata
         ↓ admit / verify / approve / commit / trace
@@ -76,7 +76,7 @@ What Fermata *is* in this neighborhood: a typed contract layer that any
 language — Python, Mojo, Elixir, TypeScript — can call into when an agent's
 proposal needs to cross the commit boundary. The IR is a JSON-Schema-bounded
 record set, not a syntax. Fermata's "language" is in the agent-utterance
-tongue (`docs/ai-native-tongue-toolkit.md`) and the human-policy DSL, both
+tongue (`docs/ai-native-tongue-toolkit.md`) and the authority-policy DSL, both
 intentionally small.
 
 ## Agent orchestrators: LangGraph, AutoGen, CrewAI
@@ -135,7 +135,7 @@ What Fermata does that guardrails systems do not:
   except through an adapter's commit operation, with durable acknowledgement;
 - record a trace that distinguishes admission, verification, approval,
   adapter error, verification failure, and policy rejection;
-- pause for human approval as an ordinary state, not an exception path.
+- pause for performer approval as an ordinary state, not an exception path.
 
 Adjacent. Some overlap on the policy axis. Different center of gravity.
 
@@ -168,7 +168,7 @@ What Fermata does that a policy engine alone does not:
   Rejected and Paused as ordinary results;
 - bind policy to the proposal speech-act ontology
   (need / claim / doubt / intend / remember / boundary), so an agent's public
-  utterance and a human's policy live in the same trace;
+  utterance and a performer's policy live in the same trace;
 - define `Committed` as a load-bearing, adapter-acknowledged state — not a
   policy decision but a verified change in the world.
 

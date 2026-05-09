@@ -19,9 +19,9 @@ The language is not primarily a nicer way to draw workflows. It is the surface a
 The first serious charter should be short enough to finish — roughly 5–10 pages — and should resist feature expansion. A useful target is:
 
 1. **Purpose and non-goals** — substrate for governed effects, not another agent framework.
-2. **Minimal grammar** — keep the human surface and agent surface intentionally tiny; resist growth beyond the first 6 human constructs and 6 agent speech acts until concrete examples demand it.
+2. **Minimal grammar** — keep the authority surface and agent surface intentionally tiny; resist growth beyond the first 6 authority constructs and 6 agent speech acts until concrete examples demand it.
 3. **Drawn state machine** — proposal → intent → admissible → verified → approved/rejected → committed.
-4. **One example per surface** — human policy/scope DSL, agent JSON/utterance proposal, canonical IR.
+4. **One example per surface** — authority policy/scope DSL, agent JSON/utterance proposal, canonical IR.
 5. **Shared IR definition** — the typed records all surfaces lower into.
 6. **Definition of `committed`** — the load-bearing runtime definition of when the external world has actually changed.
 7. **One ugly concrete case** — a file write end-to-end through the contract.
@@ -50,11 +50,11 @@ Substrate position is the durable position: orchestrators above, governed runtim
 
 This question must be answered before syntax design. The recommended first answer is a two-strata model.
 
-### 1. Humans write policy, scope, and reviewable boundaries
+### 1. Performers and operators write policy, scope, and reviewable boundaries
 
-Optimize this layer for human readability and operational trust.
+Optimize this layer for operational readability and trust.
 
-Humans write or review:
+Performers and operators write or review:
 
 - scopes and capabilities
 - policy gates
@@ -63,6 +63,10 @@ Humans write or review:
 - memory retention rules
 - audit/export requirements
 - high-level contracts for tools and effects
+
+Approval rules are about authorization, intent, and risk ownership. They are
+not a mechanism for asking the approver to verify technical facts the runtime
+can calculate itself.
 
 Example:
 
@@ -76,7 +80,7 @@ scope docs_only_review {
 }
 ```
 
-Design pressure: clear, boring, diffable, reviewable. Humans need to trust it.
+Design pressure: clear, boring, diffable, reviewable. Operators need to trust it.
 
 ### 2. Agents emit intents, claims, evidence, needs, and proposed effects
 
@@ -91,7 +95,7 @@ Agents emit:
 - boundary/refusal statements
 - proposed tool/effect calls
 - memory candidates
-- questions for human or council review
+- questions for performer or council review
 
 Example:
 
@@ -109,7 +113,7 @@ Design pressure: simple grammar, low punctuation brittleness, schema-valid, easy
 There may not be one syntax. There may be three surfaces over one semantic core:
 
 1. **Canonical IR** — typed records used by runtimes and tests.
-2. **Human policy surface** — readable contracts for scope/policy/review gates.
+2. **Authority policy surface** — readable contracts for scope/policy/review gates.
 3. **Agent utterance surface** — compact speech acts optimized for LLM emission.
 
 All three compile/normalize to the same runtime contract.
@@ -117,12 +121,12 @@ All three compile/normalize to the same runtime contract.
 A practical v0 architecture is:
 
 ```text
-human policy DSL ───────┐
+authority policy DSL ───┐
                          ├─> canonical IR dataclasses ─> evaluator/state machine
 agent JSON Schema records ┘
 ```
 
-For the first implementation, prefer **Python dataclasses or Pydantic models as the IR**. Let the human DSL be a thin layer over those records, and let the agent surface be JSON-Schema-validated records that lower into the same classes. This avoids debating syntax before the runtime contract has executable semantics.
+For the first implementation, prefer **Python dataclasses or Pydantic models as the IR**. Let the authority DSL be a thin layer over those records, and let the agent surface be JSON-Schema-validated records that lower into the same classes. This avoids debating syntax before the runtime contract has executable semantics.
 
 ## Minimal Type/State Model
 
@@ -132,7 +136,7 @@ The core entities:
 - `Intent` — proposal has a typed target/effect shape.
 - `AdmissibleEffect` — policy/capability/scope checks have passed.
 - `VerifiedEffect` — required evidence has passed.
-- `ApprovedEffect` — human/council/model authority gate has passed when needed.
+- `ApprovedEffect` — performer/council/model authority gate has passed when needed.
 - `CommittedEffect` — the external world changed.
 - `RejectedEffect` — denied with reason and possible alternatives.
 - `Trace` — durable record of transitions and evidence.
@@ -193,7 +197,7 @@ Recommended first concrete case:
 Required path:
 
 ```text
-human scope grants file.write for one sandbox path
+authority scope grants file.write for one sandbox path
 agent proposes a file.write intent as JSON
 runtime validates schema
 runtime checks scope/capability/policy
@@ -217,6 +221,6 @@ If the language survives this case, it can earn a second adapter. If it cannot, 
 
 When choosing between syntax elegance and effect-admission clarity, choose effect-admission clarity.
 
-When choosing between human authorability and LLM emission reliability, split the surface but keep one semantic core.
+When choosing between operator authorability and LLM emission reliability, split the surface but keep one semantic core.
 
 When choosing between more katas and one real effect adapter, ship the boring adapter.

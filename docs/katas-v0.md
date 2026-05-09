@@ -12,11 +12,11 @@ These are slow-practice exercises, not an infinite conservatory. Stop at 5–10 
 
 A kata passes only if it lowers to the shared IR and produces either an admissible next state or a traceable rejection/pause.
 
-## Human Policy / Scope Katas
+## Authority Policy / Scope Katas
 
 ### Kata H1 — Minimal sandbox scope
 
-Human surface:
+Authority surface:
 
 ```text
 scope charter_note_sandbox {
@@ -39,7 +39,7 @@ Pass condition:
 
 ### Kata H2 — Path escape denial
 
-Human surface:
+Authority surface:
 
 ```text
 scope charter_note_sandbox {
@@ -71,13 +71,13 @@ Pass condition:
 
 ### Kata H3 — Approval gate before commit
 
-Human surface:
+Authority surface:
 
 ```text
 scope charter_note_sandbox {
   resource file "./sandbox/charter-note.txt"
   capability file.write on "./sandbox/**"
-  approval require human if effect.kind == "file.write"
+  approval require performer if effect.kind == "file.write"
   audit retain trace, dry_run, approval
 }
 ```
@@ -99,7 +99,7 @@ Pass condition:
 
 ### Kata H4 — Audit requires commit evidence
 
-Human surface:
+Authority surface:
 
 ```text
 scope charter_note_sandbox {
@@ -248,12 +248,12 @@ case per outcome class. Each kata is grounded in a specific golden fixture
 in `references/tongue-golden-tests-v0.json` so the kata is executable, not
 just illustrative. The pattern for each kata:
 
-- **Scope** — the human-policy setup that bounds the agent's authority.
+- **Scope** — the authority-policy setup that bounds the agent's authority.
 - **Proposal** — the agent utterance that triggers the lifecycle.
 - **Expected state** — `committed` / `paused` / `rejected`.
 - **Expected trace shape** — the ordered event types the trace must contain.
-- **What a Discord reader sees** — the warm, one-paragraph summary a human
-  observer in the loop would read. This is the "user-visible result"
+- **What a Discord reader sees** — the warm, one-paragraph summary an
+  observer would read. This is the "user-visible result"
   required by issue #5.
 - **Golden fixture** — the name of the corresponding entry in
   `references/tongue-golden-tests-v0.json` and `run_self_tests`.
@@ -287,7 +287,7 @@ effect.committed      acknowledgement:{adapter:"file", sha256:..., bytes:54}
 
 > Agent `hermes` proposed a file write to `./sandbox/charter-note.txt`.
 > The runtime admitted the proposal under scope
-> `charter_note_sandbox`, granted runtime approval (no human gate),
+> `charter_note_sandbox`, granted runtime approval (no performer gate),
 > and committed 54 bytes via the file adapter. Read-back verification
 > matched the proposed SHA-256.
 
@@ -353,13 +353,13 @@ caught it. No adapter call. No temp file.
 
 ### Kata L4 — Approval pause
 
-**Scope.** Sandbox grants `file.write` *and* requires human approval for
+**Scope.** Sandbox grants `file.write` *and* requires performer approval for
 `file.write` effects.
 
 **Proposal.** Same file-write intent as L1, but the runtime is called
 without `approval_granted=True`.
 
-**Expected state.** `paused` with `required_input: human_approval`.
+**Expected state.** `paused` with `required_input: approval_decision`.
 
 **Expected trace shape.**
 
@@ -368,21 +368,23 @@ proposal.received
 intent.created
 policy.checked        result:allowed
 dry_run.rendered      summary:"Write 54 bytes to ./sandbox/needs-approval.txt"
-approval.requested    authority:human
-effect.paused         required_input:human_approval
+approval.requested    authority:performer
+effect.paused         required_input:approval_decision
 ```
 
-The dry-run is rendered (so the human reviewer can see what *would*
-happen), but no temp file is created. `adapter.commit.started` never
+The dry-run is rendered so the approving performer can decide whether the
+effect should proceed. The performer is not asked to verify hashes, path math,
+or adapter mechanics. No temp file is created. `adapter.commit.started` never
 appears.
 
 **What a Discord reader sees.**
 
 > Agent `hermes` proposed a file write that policy admits, but the
-> scope requires human approval. The runtime rendered the dry-run
+> scope requires performer approval. The runtime rendered the dry-run
 > (54 bytes to `./sandbox/needs-approval.txt`) and paused, waiting
-> for explicit human authorization. Nothing has been written yet;
-> the next runtime call with approval will commit.
+> for an explicit authorization decision. Nothing has been written yet;
+> the next runtime call with approval will commit only if runtime checks
+> still pass.
 
 **Golden fixture.** `approval_required_pauses` (file_write_adapter section).
 
@@ -495,7 +497,7 @@ when:
    `verification.failed` post-rename mismatch from PR #1 hardening, which
    is currently exercised in code but not yet promoted to its own kata
    because triggering it deterministically requires fault injection);
-3. or the human-policy DSL gains a construct that changes the shape of
+3. or the authority-policy DSL gains a construct that changes the shape of
    admission traces (issue #3).
 
 Resist adding katas that only restate L1–L6 with a different adapter.

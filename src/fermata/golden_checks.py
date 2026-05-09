@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fermata.governed_effects import run_self_tests
+from fermata.self_tests import run_self_tests
 from fermata.tongue_parser import parse_line
 from fermata.tongue_renderer import render_record
 
@@ -223,6 +223,22 @@ def check_interpreter(
     return passed
 
 
+def check_trace_ledger(
+    golden: dict[str, Any],
+    results: dict[str, Any],
+) -> list[str]:
+    """Run trace ledger golden cases."""
+
+    passed = []
+    for case in golden.get("trace_ledger", []):
+        name = case["name"]
+        actual = results[name]
+        assert actual["acknowledgement"]["adapter"] == "trace_ledger"
+        assert actual["verification"]["status"] == case["expected_status"]
+        passed.append(name)
+    return passed
+
+
 def run_golden_checks(
     *,
     golden_path: Path = DEFAULT_GOLDEN,
@@ -242,6 +258,7 @@ def run_golden_checks(
         "file_write_adapter": check_file_write(golden, adapter_results),
         "memory_write_adapter": check_memory_write(golden, adapter_results),
         "interpreter": check_interpreter(golden, adapter_results),
+        "trace_ledger": check_trace_ledger(golden, adapter_results),
     }
 
 
