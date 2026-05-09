@@ -1,6 +1,6 @@
-"""Parser for the v0 human-policy surface (curly-brace block syntax).
+"""Parser for the v0 authority-policy surface (curly-brace block syntax).
 
-Lowers a human-authored ``scope { ... }`` block into a canonical IR Scope
+Lowers an authority-authored ``scope { ... }`` block into a canonical IR Scope
 record that validates against
 ``references/governed-effect-ir-v0.schema.json``.
 
@@ -20,11 +20,11 @@ The parser does not interpret conditions; conditions are stored as opaque
 strings on the IR record. The runtime decides what conditions mean.
 
 Per charter ``docs/charter-v0.md`` §2 non-goals and §13 cut-line: this is
-not a full policy language. It is the smallest parser that proves a
-human-policy example can lower into a canonical IR Scope record. The
+not a full policy language. It is the smallest parser that proves an
+authority-policy example can lower into a canonical IR Scope record. The
 parser deliberately has no grant construct ("approval grant ..." or
-"approve ...") — the human-policy surface declares *requirements*; only
-the runtime, given an explicit operator approval, produces an approved
+"approve ...") — the authority-policy surface declares *requirements*; only
+the runtime, given an explicit approval decision, produces an approved
 state.
 """
 
@@ -40,7 +40,7 @@ _RESOURCE_KINDS = frozenset(
 _POLICY_EFFECTS = frozenset(
     {"allow", "deny", "pause", "require_approval", "require_evidence"}
 )
-_AUTHORITIES = frozenset({"human", "council", "runtime", "none"})
+_AUTHORITIES = frozenset({"performer", "council", "runtime", "none"})
 _AUDIT_FIELDS = frozenset(
     {
         "trace",
@@ -67,11 +67,11 @@ _CLOSE_RE = re.compile(r"^\s*\}\s*$")
 
 
 class PolicyParseError(ValueError):
-    """Raised when a human-policy block fails to parse."""
+    """Raised when an authority-policy block fails to parse."""
 
 
 def parse_policy_block(text: str) -> dict[str, Any]:
-    """Parse a human-policy block into a canonical IR Scope record.
+    """Parse an authority-policy block into a canonical IR Scope record.
 
     The returned dict is shaped to match the ``Scope`` definition in
     ``references/governed-effect-ir-v0.schema.json``: it carries
@@ -229,7 +229,7 @@ def parse_agent_proposal_json(json_text: str) -> dict[str, Any]:
     Agents emit JSON that is meant to validate as a ``Proposal`` record
     against ``references/governed-effect-ir-v0.schema.json``. This helper
     is a thin wrapper around ``json.loads`` that exists so callers can
-    treat the agent surface symmetrically with the human surface
+    treat the agent surface symmetrically with the authority surface
     (``parse_policy_block``).
 
     The helper deliberately does *not* attempt to interpret the proposal,

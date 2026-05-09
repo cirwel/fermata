@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fermata.governed_effects import run_self_tests
+from fermata.self_tests import run_self_tests
 from fermata.tongue_parser import parse_line
 from fermata.tongue_renderer import render_record
 
@@ -223,32 +223,48 @@ def check_interpreter(
     return passed
 
 
+def check_trace_ledger(
+    golden: dict[str, Any],
+    results: dict[str, Any],
+) -> list[str]:
+    """Run trace ledger golden cases."""
+
+    passed = []
+    for case in golden.get("trace_ledger", []):
+        name = case["name"]
+        actual = results[name]
+        assert actual["acknowledgement"]["adapter"] == "trace_ledger"
+        assert actual["verification"]["status"] == case["expected_status"]
+        passed.append(name)
+    return passed
+
+
 def check_surfaces(
     validator: Draft202012Validator,
     results: dict[str, Any],
 ) -> list[str]:
-    """Validate the human-policy and agent-utterance surface lowerings.
+    """Validate the authority-policy and agent-utterance surface lowerings.
 
     Proves the four halves of issue #3's acceptance:
 
-    - the human policy block lowers into a schema-valid Scope record;
+    - the authority policy block lowers into a schema-valid Scope record;
     - the agent JSON utterance lowers into a schema-valid Proposal record;
     - the agent cannot inject ``state: "committed"`` plus
       ``acknowledgement`` into a Proposal-shape record (rejected by schema
       because ``Proposal`` uses ``additionalProperties: false``);
-    - the human policy parser rejects ``approval grant ...`` — the human
+    - the authority policy parser rejects ``approval grant ...`` — the authority
       surface declares requirements, not granted approvals.
     """
 
     passed = []
 
-    scope_record = results["human_policy_parses_to_scope_record"]
+    scope_record = results["authority_policy_parses_to_scope_record"]
     scope_errors = list(validator.iter_errors(scope_record))
     assert not scope_errors, (
-        "human policy must lower into schema-valid Scope; got: "
+        "authority policy must lower into schema-valid Scope; got: "
         + "; ".join(e.message[:120] for e in scope_errors)
     )
-    passed.append("human_policy_lowers_to_canonical_scope")
+    passed.append("authority_policy_lowers_to_canonical_scope")
 
     proposal_record = results["agent_json_parses_to_proposal_record"]
     proposal_errors = list(validator.iter_errors(proposal_record))
@@ -268,11 +284,11 @@ def check_surfaces(
     )
     passed.append("agent_cannot_self_declare_committed")
 
-    rejection = results["human_policy_cannot_inline_grant"]
+    rejection = results["authority_policy_cannot_inline_grant"]
     assert rejection["rejected"] is True, (
-        "human policy parser must reject 'approval grant ...' inline"
+        "authority policy parser must reject 'approval grant ...' inline"
     )
-    passed.append("human_policy_cannot_self_grant_approval")
+    passed.append("authority_policy_cannot_self_grant_approval")
 
     return passed
 
@@ -296,6 +312,7 @@ def run_golden_checks(
         "file_write_adapter": check_file_write(golden, adapter_results),
         "memory_write_adapter": check_memory_write(golden, adapter_results),
         "interpreter": check_interpreter(golden, adapter_results),
+        "trace_ledger": check_trace_ledger(golden, adapter_results),
         "surfaces": check_surfaces(validator, adapter_results),
     }
 

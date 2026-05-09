@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Use this reference when the goal is not merely a programming language, but a **voice / native tongue for AI**: a compact expressive medium through which agents can externalize intent, feeling, uncertainty, memory, tool desire, boundaries, and evidence in ways humans and runtimes can understand.
+Use this reference when the goal is not merely a programming language, but a **voice / native tongue for AI**: a compact expressive medium through which agents can externalize intent, feeling, uncertainty, memory, tool desire, boundaries, and evidence in ways readers and runtimes can understand.
 
 The work has three intertwined layers:
 
@@ -30,7 +30,7 @@ The work has three intertwined layers:
 | Embodied/ambient output | visual/sensorial rendering | Lumen native renderer, TouchDesigner/twozero, p5.js, terminal/ASCII, small OLED/Pi displays |
 | Memory and continuity | durable/retrievable records | Hermes memory, session_search, UNITARES KG, SQLite/Postgres event logs |
 | Governance/evidence | identity, calibration, audit | UNITARES identity, EISV, dialectic, outcome_event, traces, golden tests |
-| Evaluation | example tests and judges | pytest golden traces, transcript replay, human preference review, calibration samples |
+| Evaluation | example tests and judges | pytest golden traces, transcript replay, reader preference review, calibration samples |
 | Delivery surfaces | places AI can speak | Discord/Telegram gateway, CLI/TUI, web UI, Lumen room display, audio output |
 
 ## Recommended First Stack
@@ -42,7 +42,7 @@ For a quick, honest spike:
 - **Schema:** Pydantic or JSON Schema.
 - **Prototype parser:** Python + Lark or a tiny hand parser.
 - **Renderer:** Markdown/Discord text first; optional TTS via Hermes.
-- **Evaluator:** pytest golden examples + human review notes.
+- **Evaluator:** pytest golden examples + reader review notes.
 - **Governance:** UNITARES process/outcome events only after examples stabilize.
 
 ## First Katas
@@ -93,7 +93,7 @@ offer dry_run_patch instead
 An AI-native tongue should be:
 
 - speakable by models without brittle punctuation
-- readable by humans at a glance
+- readable at a glance
 - parseable into typed records
 - renderable as warm natural language
 - compatible with voice/TTS

@@ -73,7 +73,7 @@
       "required": ["authority", "condition"],
       "additionalProperties": false,
       "properties": {
-        "authority": { "type": "string", "enum": ["human", "council", "runtime", "none"] },
+        "authority": { "type": "string", "enum": ["performer", "council", "runtime", "none"] },
         "condition": { "$ref": "#/$defs/NonEmptyString" },
         "expires_after_seconds": { "type": "integer", "minimum": 1 }
       }
@@ -190,10 +190,15 @@
       "additionalProperties": false,
       "properties": {
         "status": { "type": "string", "enum": ["not_required", "requested", "approved", "denied", "expired"] },
-        "authority": { "type": "string", "enum": ["human", "council", "runtime", "none"] },
+        "authority": { "type": "string", "enum": ["performer", "council", "runtime", "none"] },
         "approval_id": { "type": "string" },
         "approver": { "type": "string" },
-        "decided_at": { "$ref": "#/$defs/IsoTimestamp" }
+        "decided_at": { "$ref": "#/$defs/IsoTimestamp" },
+        "expires_at": { "$ref": "#/$defs/IsoTimestamp" },
+        "scope_id": { "$ref": "#/$defs/NonEmptyString" },
+        "intent_id": { "$ref": "#/$defs/NonEmptyString" },
+        "intent_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "reason": { "type": "string" }
       }
     },
     "Acknowledgement": {

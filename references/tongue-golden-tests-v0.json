@@ -149,7 +149,21 @@
     {
       "name": "approval_required_pauses",
       "expected_state": "paused",
-      "expected_required_input": "human_approval"
+      "expected_required_input": "approval_decision"
+    },
+    {
+      "name": "explicit_approval_write_commits",
+      "expected_state": "committed"
+    },
+    {
+      "name": "approval_denied_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "approval_denied"
+    },
+    {
+      "name": "approval_intent_hash_mismatch_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "approval_intent_hash_mismatch"
     },
     {
       "name": "capability_spoof_rejected",
@@ -176,12 +190,27 @@
       "expected_reason": "target_is_symlink"
     },
     {
+      "name": "late_target_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_is_symlink"
+    },
+    {
       "name": "path_component_is_symlink_rejected",
       "expected_state": "rejected",
       "expected_reason": "path_component_is_symlink"
     },
     {
+      "name": "late_path_component_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_component_is_symlink"
+    },
+    {
       "name": "target_exists_no_overwrite_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_exists_no_overwrite"
+    },
+    {
+      "name": "late_target_exists_no_overwrite_rejected",
       "expected_state": "rejected",
       "expected_reason": "target_exists_no_overwrite"
     },
@@ -217,7 +246,7 @@
     {
       "name": "memory_approval_required_pauses",
       "expected_state": "paused",
-      "expected_required_input": "human_approval"
+      "expected_required_input": "approval_decision"
     },
     {
       "name": "memory_empty_target_rejected",
@@ -299,7 +328,7 @@
     {
       "name": "interpret_file_write_paused_without_committing",
       "expected_state": "paused",
-      "expected_required_input": "human_approval"
+      "expected_required_input": "approval_decision"
     },
     {
       "name": "interpret_file_write_rejected",
@@ -319,6 +348,12 @@
     {
       "name": "interpret_memory_write_approved_without_committing",
       "expected_state": "approved"
+    }
+  ],
+  "trace_ledger": [
+    {
+      "name": "trace_ledger_append_verified",
+      "expected_status": "verified"
     }
   ]
 }

@@ -43,6 +43,9 @@ and only then commit.
 - A typed record shape for scopes, proposals, intents, effect outcomes, and traces.
 - A testable boundary between model/orchestrator proposals and durable side effects.
 - A place to practice effect admission, denial, pause, approval, commit, and audit.
+- A readable account a non-coder steward can use to decide intent and impact:
+  what was proposed, what the runtime verified, why it paused, who approved it,
+  and what actually committed.
 
 ## What Fermata is not
 
@@ -66,6 +69,7 @@ docs/
   katas-v0.md
   tongue-eval-rubric-v0.md
   ai-native-tongue-toolkit.md
+  ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
   ai-native-tongue-seed-corpus-v0.jsonl
@@ -78,7 +82,14 @@ scripts/
 src/
   fermata/
     __init__.py
+    file_adapter.py
     governed_effects.py
+    interpreter.py
+    memory_adapter.py
+    policy_parser.py
+    runtime_core.py
+    runtime_ir.py
+    self_tests.py
 ```
 
 ## Runtime state model
@@ -185,10 +196,10 @@ fermata-render-tongue references/ai-native-tongue-seed-corpus-v0.jsonl --limit 6
 
 ## Contributing
 
-Human and agent contributions are welcome when they preserve the core boundary:
+Person and agent contributions are welcome when they preserve the core boundary:
 proposal is not commit. Start with:
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) for human/agent/model contribution protocol.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for person/agent/model contribution protocol.
 - [AGENTS.md](AGENTS.md) for coding-agent operating rules.
 - [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) for review gates.
 
@@ -205,7 +216,7 @@ examples only where they improve executable traces.
 
 1. [Harden the file adapter against adversarial filesystem races](https://github.com/cirwel/fermata/issues/1).
 2. [Add a second adapter with the same proposal/intent/pause/reject/commit trace](https://github.com/cirwel/fermata/issues/2) — landed as local `memory.write`.
-3. [Split human policy surface from agent utterance surface over the same IR](https://github.com/cirwel/fermata/issues/3).
+3. [Split authority policy surface from agent utterance surface over the same IR](https://github.com/cirwel/fermata/issues/3).
 4. [Make the interpreter loop explicit over the shared IR](https://github.com/cirwel/fermata/issues/4).
 5. [Expand golden traces into reusable katas for downstream runtimes](https://github.com/cirwel/fermata/issues/5).
 6. [Compare Fermata against adjacent AI language and runtime ecosystems](https://github.com/cirwel/fermata/issues/6).

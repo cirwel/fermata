@@ -8,7 +8,7 @@
 
 > **Agents may propose; only governed effects may commit.**
 
-Fermata welcomes contributions from humans, agents, and model-assisted workflows,
+Fermata welcomes contributions from people, agents, and model-assisted workflows,
 but every contribution should preserve the core boundary: model output is a
 proposal, not a committed external-world effect. Contributions should make the
 runtime contract more inspectable, bounded, testable, replayable, and useful.
@@ -19,9 +19,9 @@ Before opening a non-trivial change, read:
 
 1. `README.md` — project identity, state model, and checks.
 2. `docs/charter-v0.md` — semantic charter and definition of `committed`.
-3. `docs/runtime-contract-authoring-model.md` — human policy surface, agent
+3. `docs/runtime-contract-authoring-model.md` — authority policy surface, agent
    proposal surface, and shared IR.
-4. `docs/tongue-eval-rubric-v0.md` — human taste/eval criteria.
+4. `docs/tongue-eval-rubric-v0.md` — reader taste/eval criteria.
 5. `AGENTS.md` — short operational rules for coding agents working in this repo.
 
 ## Contribution Priorities
@@ -39,12 +39,12 @@ framework features before the runtime contract is sharper.
 
 ## Agent and Model Coordination Contract
 
-When humans coordinate multiple agents or models, use explicit roles. One model
+When people coordinate multiple agents or models, use explicit roles. One model
 should not silently perform every role.
 
 | Role | Responsibility | Boundary |
 |---|---|---|
-| Human steward | Defines scope, risk tolerance, and merge authority | Owns final acceptance |
+| Maintainer steward | Defines scope, risk tolerance, and merge authority | Owns final acceptance |
 | Implementer agent/model | Proposes patches, tests, docs, schemas, or examples | Does not self-approve |
 | Spec reviewer agent/model | Checks whether the change matches the stated task | Reviews scope compliance first |
 | Quality reviewer agent/model | Checks maintainability, safety, tests, and clarity | Reviews after spec fit |
@@ -63,7 +63,7 @@ coordination note in the PR body:
 Agent/model involvement:
 - Implementer: <agent/model/tool, if known>
 - Reviewer: <agent/model/tool, if used>
-- Human steward: <person approving scope>
+- Maintainer steward: <person approving scope>
 - Scope granted: <files/resources/tools touched>
 - Effects performed: <file writes, commands, tests, network/API calls>
 - Evidence: <tests, traces, logs, schema validation, manual review>
@@ -103,7 +103,7 @@ the PR into a transcript dump.
 
 ## Handoff Packet Template
 
-Use this when passing work between humans, agents, or models:
+Use this when passing work between people, agents, or models:
 
 ```markdown
 ## Task
