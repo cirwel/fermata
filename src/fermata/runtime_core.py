@@ -206,7 +206,11 @@ def evaluate_with_adapter(
     approval: ApprovalDecision | None = None,
     _stop_at_approval: bool = False,
 ) -> tuple[EffectResult, Trace]:
-    """Run the shared proposal -> approval -> optional commit state machine."""
+    """Run the shared proposal -> approval -> optional commit state machine.
+
+    Required approvals should arrive as typed ``ApprovalDecision`` records.
+    ``approval_granted`` remains as compatibility for older callers.
+    """
 
     trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
     trace.add(

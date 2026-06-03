@@ -198,8 +198,8 @@ which only the runtime can produce. Tested in
 **Authority inline grant.** The authority-policy parser has no `approval grant
 ...` construct — the authority surface declares *requirements*
 (`approval require performer if ...`), not granted approvals. A grant only
-exists at runtime, when the runtime receives an explicit approval record or
-approval flag. Tested in `run_self_tests` as
+exists at runtime, when the runtime receives an explicit approval record bound
+to the scope, intent, and intent hash. Tested in `run_self_tests` as
 `authority_policy_cannot_inline_grant`.
 
 The cut-line: the runtime is the only authority that can produce a

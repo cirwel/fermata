@@ -316,7 +316,13 @@ def approval_for(
     approval: ApprovalDecision | None = None,
     approval_granted: bool = False,
 ) -> ApprovalDecision:
-    """Return an explicit approval decision for the current transition."""
+    """Return an approval decision for the current transition.
+
+    ``approval_granted`` is retained for legacy callers. Runtime paths that
+    require performer or council authorization should pass an explicit
+    ``ApprovalDecision`` so approval remains bound to the exact scope, intent,
+    and intent hash.
+    """
 
     if approval is not None:
         return approval
@@ -341,6 +347,7 @@ def approval_for(
             scope_id=scope.scope_id,
             intent_id=intent.intent_id,
             intent_sha256=intent_sha256(intent),
+            reason="legacy_boolean_approval_granted",
         )
     return ApprovalDecision(
         status=ApprovalStatus.NOT_REQUIRED,
@@ -349,6 +356,39 @@ def approval_for(
         scope_id=scope.scope_id,
         intent_id=intent.intent_id,
         intent_sha256=intent_sha256(intent),
+    )
+
+
+def make_approval_decision(
+    scope: Scope,
+    intent: Intent,
+    *,
+    approver: str,
+    status: ApprovalStatus = ApprovalStatus.APPROVED,
+    authority: ApprovalAuthority = ApprovalAuthority.PERFORMER,
+    reason: str | None = None,
+    approval_id: str | None = None,
+    decided_at: str | None = None,
+    expires_at: str | None = None,
+) -> ApprovalDecision:
+    """Build a canonical approval record bound to one scope and intent.
+
+    Approval is an authorization decision, not technical verification. This
+    helper records who held or released the boundary while binding that decision
+    to the intent hash the runtime itself can verify.
+    """
+
+    return ApprovalDecision(
+        status=status,
+        authority=authority,
+        approval_id=approval_id or f"approval_{uuid.uuid4().hex[:8]}",
+        approver=approver,
+        decided_at=decided_at or now_timestamp(),
+        expires_at=expires_at,
+        scope_id=scope.scope_id,
+        intent_id=intent.intent_id,
+        intent_sha256=intent_sha256(intent),
+        reason=reason,
     )
 
 

@@ -1,6 +1,9 @@
 """Fermata governed-effect runtime seed package."""
 
 from fermata.governed_effects import (
+    ApprovalAuthority,
+    ApprovalDecision,
+    ApprovalStatus,
     EffectResult,
     EffectState,
     Intent,
@@ -9,6 +12,7 @@ from fermata.governed_effects import (
     Trace,
     evaluate_file_write,
     evaluate_memory_write,
+    make_approval_decision,
     memory_store_path,
 )
 from fermata.tongue_parser import parse_line
@@ -19,6 +23,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "CHORUS",
+    "ApprovalAuthority",
+    "ApprovalDecision",
+    "ApprovalStatus",
     "EffectResult",
     "EffectState",
     "Intent",
@@ -28,6 +35,7 @@ __all__ = [
     "__version__",
     "evaluate_file_write",
     "evaluate_memory_write",
+    "make_approval_decision",
     "memory_store_path",
     "parse_line",
     "render_record",

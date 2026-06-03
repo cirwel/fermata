@@ -94,6 +94,10 @@ resolution, hashes, byte counts, schema validity, or read-back evidence. The
 runtime owns those checks. The approval decision answers whether the already
 rendered effect is wanted, authorized, and in scope.
 
+New approval paths should pass this typed record to the evaluator. The older
+`approval_granted=True` shortcut is legacy compatibility only; it cannot carry
+the same explicit approver, reason, expiry, and intent-binding evidence.
+
 Compatibility note: earlier draft traces may contain `authority: "human"`.
 Treat that as legacy authoring language and migrate it to
 `authority: "performer"` with the concrete actor preserved in `approver`, for

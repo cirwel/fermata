@@ -416,6 +416,9 @@ def evaluate_memory_write(
     version. A committed memory write means the local memory ledger contains the
     proposed record and the runtime verified its SHA-256 evidence.
 
+    Prefer passing a typed ``ApprovalDecision`` when performer approval is
+    required. ``approval_granted`` is retained only for legacy callers.
+
     When ``_stop_at_approval`` is True, the evaluator runs pure admission,
     verification, and approval phases and stops before any adapter commit —
     returning an ``EffectState.APPROVED`` result whose trace ends at
