@@ -38,7 +38,7 @@ def interpret(
     appended, no network is called. The trace stops at ``approval.granted`` (or
     earlier on rejection / pause). To actually commit, call the public
     adapter-specific entry point (``evaluate_file_write``, ``evaluate_memory_write``)
-    with ``approval_granted=True``.
+    with an explicit ``ApprovalDecision`` when approval is required.
 
     The interpreter dispatches by ``intent.adapter``. Unsupported adapters are
     rejected with reason ``unsupported_adapter_for_interpret``; this is distinct

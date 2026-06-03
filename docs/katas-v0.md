@@ -356,8 +356,8 @@ caught it. No adapter call. No temp file.
 **Scope.** Sandbox grants `file.write` *and* requires performer approval for
 `file.write` effects.
 
-**Proposal.** Same file-write intent as L1, but the runtime is called
-without `approval_granted=True`.
+**Proposal.** Same file-write intent as L1, but the runtime is called without
+an `ApprovalDecision` record.
 
 **Expected state.** `paused` with `required_input: approval_decision`.
 

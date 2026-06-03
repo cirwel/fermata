@@ -459,6 +459,9 @@ def evaluate_file_write(
 ) -> tuple[EffectResult, Trace]:
     """Evaluate one governed file-write proposal end to end.
 
+    Prefer passing a typed ``ApprovalDecision`` when performer approval is
+    required. ``approval_granted`` is retained only for legacy callers.
+
     When ``_stop_at_approval`` is True, the evaluator runs pure admission,
     verification, and approval phases and stops before any adapter commit —
     returning an ``EffectState.APPROVED`` result whose trace ends at

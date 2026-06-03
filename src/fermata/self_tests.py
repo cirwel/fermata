@@ -36,6 +36,7 @@ from fermata.runtime_ir import (
     Trace,
     approval_for,
     intent_sha256,
+    make_approval_decision,
     now_timestamp,
 )
 
@@ -130,13 +131,25 @@ def run_self_tests() -> dict[str, Any]:
         results["adapter_error_rejected"] = adapter_error.to_record()
         results["adapter_error_trace"] = adapter_error_trace.to_record()
 
+        allowed_write_scope = sample_scope(root, approval_required=True)
+        allowed_write_proposal = sample_proposal()
+        assert allowed_write_proposal.intent is not None
+        allowed_write_approval = make_approval_decision(
+            allowed_write_scope,
+            allowed_write_proposal.intent,
+            approver="performer:steward",
+            reason="steward_authorized",
+        )
         committed, committed_trace = evaluate_file_write(
-            sample_scope(root, approval_required=True),
-            sample_proposal(),
-            approval_granted=True,
+            allowed_write_scope,
+            allowed_write_proposal,
+            approval=allowed_write_approval,
         )
         assert committed.state == EffectState.COMMITTED
         assert committed.acknowledgement is not None
+        assert committed.approval is not None
+        assert committed.approval["approver"] == "performer:steward"
+        assert committed.approval["reason"] == "steward_authorized"
         target = Path(committed.acknowledgement["target"])
         assert target.exists()
         assert committed.verification is not None
@@ -329,11 +342,11 @@ def run_self_tests() -> dict[str, Any]:
         explicit_approval_proposal = sample_proposal("explicit-approval.txt")
         assert explicit_approval_proposal.intent is not None
         explicit_scope = sample_scope(root, approval_required=True)
-        explicit_approval = approval_for(
+        explicit_approval = make_approval_decision(
             explicit_scope,
             explicit_approval_proposal.intent,
-            "file.write",
-            approval_granted=True,
+            approver="performer:steward",
+            reason="steward_authorized",
         )
         explicit_committed, explicit_committed_trace = evaluate_file_write(
             explicit_scope,
@@ -351,18 +364,25 @@ def run_self_tests() -> dict[str, Any]:
         results["explicit_approval_write_commits"] = explicit_committed.to_record()
         results["explicit_approval_write_trace"] = explicit_committed_trace.to_record()
 
+        legacy_approval = approval_for(
+            explicit_scope,
+            explicit_approval_proposal.intent,
+            "file.write",
+            approval_granted=True,
+        )
+        assert legacy_approval.reason == "legacy_boolean_approval_granted"
+        assert legacy_approval.approver == "legacy:approval_granted"
+        results["legacy_boolean_approval_marked"] = legacy_approval.to_record()
+
         denied_approval_proposal = sample_proposal("denied-approval.txt")
         assert denied_approval_proposal.intent is not None
         denied_scope = sample_scope(root, approval_required=True)
-        denied_approval = ApprovalDecision(
+        denied_approval = make_approval_decision(
+            denied_scope,
+            denied_approval_proposal.intent,
             status=ApprovalStatus.DENIED,
-            authority=ApprovalAuthority.PERFORMER,
             approval_id="approval_denied_001",
             approver="performer:steward",
-            decided_at=now_timestamp(),
-            scope_id=denied_scope.scope_id,
-            intent_id=denied_approval_proposal.intent.intent_id,
-            intent_sha256=intent_sha256(denied_approval_proposal.intent),
             reason="performer_denied",
         )
         denied_approval_result, denied_approval_trace = evaluate_file_write(
@@ -613,13 +633,25 @@ def run_self_tests() -> dict[str, Any]:
         results["target_exists_with_overwrite_commits"] = overwrote.to_record()
         results["target_exists_with_overwrite_trace"] = overwrote_trace.to_record()
 
+        allowed_memory_scope = sample_memory_scope(root, approval_required=True)
+        allowed_memory_proposal = sample_memory_proposal()
+        assert allowed_memory_proposal.intent is not None
+        allowed_memory_approval = make_approval_decision(
+            allowed_memory_scope,
+            allowed_memory_proposal.intent,
+            approver="performer:steward",
+            reason="steward_authorized",
+        )
         memory_committed, memory_committed_trace = evaluate_memory_write(
-            sample_memory_scope(root, approval_required=True),
-            sample_memory_proposal(),
-            approval_granted=True,
+            allowed_memory_scope,
+            allowed_memory_proposal,
+            approval=allowed_memory_approval,
         )
         assert memory_committed.state == EffectState.COMMITTED
         assert memory_committed.acknowledgement is not None
+        assert memory_committed.approval is not None
+        assert memory_committed.approval["approver"] == "performer:steward"
+        assert memory_committed.approval["reason"] == "steward_authorized"
         assert memory_committed.acknowledgement["adapter"] == "memory"
         assert memory_committed.acknowledgement["record_id"]
         assert memory_committed.acknowledgement["version"] == 1
