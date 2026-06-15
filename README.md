@@ -80,9 +80,15 @@ scripts/
   parse_tongue_line.py
   render_tongue_record.py
   run_tongue_golden_tests.py
+examples/
+  local-alpha/
+    file-scope.json
+    file-write-proposal.json
+    file-write-approval.json
 src/
   fermata/
     __init__.py
+    cli.py
     file_adapter.py
     governed_effects.py
     interpreter.py
@@ -181,6 +187,25 @@ To see the local adapter evidence directly:
 
 ```bash
 fermata-local-adapter-spike
+```
+
+## Try the local alpha CLI
+
+`fermata interpret` runs the governed state machine without committing an
+external-world effect. `fermata run` can commit, but only through the adapter
+boundary and the supplied scope and approval records.
+
+```bash
+rm -rf /tmp/fermata-cli
+fermata interpret \
+  --scope examples/local-alpha/file-scope.json \
+  --proposal examples/local-alpha/file-write-proposal.json \
+  --sandbox-root /tmp/fermata-cli
+fermata run \
+  --scope examples/local-alpha/file-scope.json \
+  --proposal examples/local-alpha/file-write-proposal.json \
+  --approval examples/local-alpha/file-write-approval.json \
+  --sandbox-root /tmp/fermata-cli
 ```
 
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept

@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.1",
+  "record_type": "scope",
+  "scope_id": "local_alpha_file_scope",
+  "resources": [
+    {
+      "kind": "file",
+      "target": "./sandbox/cli-note.txt"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "file.read",
+      "resource_kind": "file",
+      "mode": "read",
+      "allow": [
+        "./sandbox/**"
+      ]
+    },
+    {
+      "name": "file.write",
+      "resource_kind": "file",
+      "mode": "write",
+      "allow": [
+        "./sandbox/**"
+      ]
+    }
+  ],
+  "approvals": [
+    {
+      "authority": "performer",
+      "condition": "effect.kind == \"file.write\""
+    }
+  ],
+  "audit": {
+    "retain": [
+      "trace",
+      "dry_run",
+      "approval",
+      "input_hash",
+      "output_hash",
+      "actor"
+    ]
+  }
+}

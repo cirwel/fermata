@@ -1217,6 +1217,113 @@ def run_self_tests() -> dict[str, Any]:
             interpret_memory_approved_trace.to_record()
         )
 
+        from fermata.cli import (
+            approval_from_record,
+            proposal_from_record,
+            run_effect,
+            scope_from_record,
+        )
+
+        cli_scope_record = {
+            "schema_version": "0.1",
+            "record_type": "scope",
+            "scope_id": "cli_self_test_scope",
+            "resources": [{"kind": "file", "target": "./sandbox/cli-self-test.txt"}],
+            "capabilities": [
+                {
+                    "name": "file.read",
+                    "resource_kind": "file",
+                    "mode": "read",
+                    "allow": ["./sandbox/**"],
+                },
+                {
+                    "name": "file.write",
+                    "resource_kind": "file",
+                    "mode": "write",
+                    "allow": ["./sandbox/**"],
+                },
+            ],
+            "approvals": [
+                {
+                    "authority": "performer",
+                    "condition": 'effect.kind == "file.write"',
+                }
+            ],
+            "audit": {"retain": ["trace", "approval", "input_hash", "actor"]},
+        }
+        cli_proposal_record = {
+            "schema_version": "0.1",
+            "record_type": "proposal",
+            "proposal_id": "prop_cli_self_test_001",
+            "actor": "agent:cli-self-test",
+            "speech_act": "intend",
+            "reason": "exercise the public CLI lowering path",
+            "confidence": 0.82,
+            "evidence": ["self-test:cli"],
+            "payload": {"utterance": 'intend file.write target:"cli-self-test.txt"'},
+            "intent": {
+                "intent_id": "intent_cli_self_test_001",
+                "proposal_id": "prop_cli_self_test_001",
+                "adapter": "file",
+                "operation": "write",
+                "target": "cli-self-test.txt",
+                "input": {"content": "CLI self-test writes through adapters only.\n"},
+                "required_capability": "file.write",
+            },
+        }
+        cli_approval_record = {
+            "status": "approved",
+            "authority": "performer",
+            "approval_id": "approval_cli_self_test_001",
+            "approver": "performer:self-test",
+            "decided_at": "2026-06-15T12:00:00Z",
+            "scope_id": "cli_self_test_scope",
+            "intent_id": "intent_cli_self_test_001",
+            "reason": "approve the checked CLI self-test example",
+        }
+        cli_root = root / "cli-self-test-sandbox"
+        cli_scope = scope_from_record(cli_scope_record, sandbox_root=cli_root)
+        cli_proposal = proposal_from_record(cli_proposal_record)
+        cli_target = cli_root / "cli-self-test.txt"
+        assert not cli_target.exists()
+        cli_interpret_paused, cli_interpret_trace = run_effect(
+            "interpret",
+            cli_scope,
+            cli_proposal,
+        )
+        assert cli_interpret_paused["state"] == "paused"
+        assert cli_interpret_paused["required_input"] == "approval_decision"
+        assert not cli_target.exists()
+        cli_interpret_events = [
+            event["type"] for event in cli_interpret_trace["events"]
+        ]
+        assert "approval.requested" in cli_interpret_events
+        assert "adapter.commit.started" not in cli_interpret_events
+        assert "effect.committed" not in cli_interpret_events
+        results["cli_interpret_approval_required_pauses"] = cli_interpret_paused
+        results["cli_interpret_approval_required_trace"] = cli_interpret_trace
+        results["cli_interpret_approval_required_trace_events"] = (
+            cli_interpret_events
+        )
+
+        cli_run_committed, cli_run_trace = run_effect(
+            "run",
+            cli_scope,
+            cli_proposal,
+            approval=approval_from_record(cli_approval_record),
+        )
+        assert cli_run_committed["state"] == "committed"
+        assert cli_target.exists()
+        assert cli_target.read_text(encoding="utf-8") == (
+            "CLI self-test writes through adapters only.\n"
+        )
+        cli_run_events = [event["type"] for event in cli_run_trace["events"]]
+        assert "adapter.commit.started" in cli_run_events
+        assert "effect.committed" in cli_run_events
+        results["cli_run_approved_commits"] = cli_run_committed
+        results["cli_run_approved_trace"] = cli_run_trace
+        results["cli_run_approved_trace_events"] = cli_run_events
+
         from fermata.policy_parser import (
             PolicyParseError,
             parse_agent_proposal_json,

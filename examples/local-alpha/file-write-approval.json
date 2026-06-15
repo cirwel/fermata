@@ -1,0 +1,10 @@
+{
+  "status": "approved",
+  "authority": "performer",
+  "approval_id": "approval_local_alpha_file_write_001",
+  "approver": "performer:local-alpha",
+  "decided_at": "2026-06-15T12:00:00Z",
+  "scope_id": "local_alpha_file_scope",
+  "intent_id": "intent_local_alpha_file_write_001",
+  "reason": "approve the checked local CLI example"
+}
