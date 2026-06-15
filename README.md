@@ -69,6 +69,7 @@ docs/
   katas-v0.md
   tongue-eval-rubric-v0.md
   ai-native-tongue-toolkit.md
+  deployability-dossier-v0.md
   ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
@@ -172,6 +173,9 @@ Expected final status:
 ```json
 {"status": "passed"}
 ```
+
+The distance from the current runtime seed to a deployable local alpha is tracked
+in [docs/deployability-dossier-v0.md](docs/deployability-dossier-v0.md).
 
 To see the local adapter evidence directly:
 
