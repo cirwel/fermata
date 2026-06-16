@@ -80,7 +80,7 @@ python3 scripts/check_local_alpha_tag_publication_preflight.py
 
 Before publication, this proves missing approval is rejected without effects.
 After publication, it accepts the existing local release tag only if the tag
-points at `HEAD`.
+target is an ancestor of `HEAD`.
 
 After explicit maintainer approval, run the final no-effect publication
 preflight with the approval reference before creating or pushing the tag:
@@ -124,8 +124,8 @@ The validator currently covers:
   without creating or pushing the tag;
 - tag publication preflight checks that reject missing approval before
   publication, accept an existing local release tag only when it points at
-  `HEAD`, and after approval is supplied, rerun strict release checks without
-  creating or pushing the tag;
+  an ancestor of `HEAD`, and after approval is supplied, rerun strict release
+  checks without creating or pushing the tag;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -153,8 +153,9 @@ Before presenting a local alpha:
   rechecks, the approval reference requirement, and the no-tag/no-push
   non-effects;
 - the tag publication preflight either rejects missing approval without effects,
-  accepts an already-created local tag pointing at `HEAD`, or, after approval is
-  supplied, passes strict checks and still records no tag creation or push;
+  accepts an already-created local tag whose target is an ancestor of `HEAD`,
+  or, after approval is supplied, passes strict checks and still records no tag
+  creation or push;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user

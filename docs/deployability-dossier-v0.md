@@ -76,7 +76,7 @@ The current repo proves a smaller but real core:
   `scripts/check_local_alpha_tag_publication_preflight.py` that rejects missing
   approval by default and, after approval is supplied, reruns strict checks
   without creating or pushing the tag; after publication, the same default gate
-  accepts a local release tag only when it points at `HEAD`;
+  accepts a local release tag only when its target is an ancestor of `HEAD`;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -182,9 +182,9 @@ approval and records no tag creation or push.
 The tag publication preflight is the executable final hold before the tag
 effect. Before publication, normal validation proves missing approval is
 rejected without effects. After publication, normal validation accepts the local
-release tag only when it points at `HEAD`. When an explicit approval reference
-is supplied before tagging, the preflight reruns the strict pre-tag checks and
-still only returns the exact commands to run next.
+release tag only when its target is an ancestor of `HEAD`. When an explicit
+approval reference is supplied before tagging, the preflight reruns the strict
+pre-tag checks and still only returns the exact commands to run next.
 
 ## 4. Readiness Matrix
 
@@ -205,7 +205,7 @@ still only returns the exact commands to run next.
 | Release candidate | Clean-worktree dry run exists | `check_local_alpha_release_candidate` passes before tagging |
 | Candidate record | Concrete pre-tag evidence record exists | `check_local_alpha_release_candidate_record` stays green |
 | Tag approval packet | Pre-tag maintainer approval packet exists | `check_local_alpha_tag_approval_packet` stays green before tagging |
-| Tag publication preflight | Executable final no-effect hold exists | Missing approval is rejected pre-tag; post-tag local tag must point at `HEAD` |
+| Tag publication preflight | Executable final no-effect hold exists | Missing approval is rejected pre-tag; post-tag local tag target must be an ancestor of `HEAD` |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 

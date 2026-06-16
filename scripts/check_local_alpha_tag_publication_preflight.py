@@ -80,6 +80,19 @@ def local_tag_target(root: Path) -> str:
     return git_output(root, ["rev-parse", f"{RELEASE_TAG}^{{commit}}"])
 
 
+def git_succeeds(root: Path, args: list[str]) -> bool:
+    """Return whether a Git check command succeeds."""
+
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def remote_tag_exists(root: Path) -> bool:
     """Return whether the release tag exists on the origin remote."""
 
@@ -249,11 +262,14 @@ def run_refusal_self_test(*, root: Path | None = None) -> dict[str, Any]:
     if local_before:
         head = git_output(repo, ["rev-parse", "HEAD"])
         target = local_tag_target(repo)
-        require(target == head, "local_tag_target_not_head")
+        target_is_ancestor = git_succeeds(
+            repo, ["merge-base", "--is-ancestor", target, head]
+        )
+        require(target_is_ancestor, "local_tag_target_not_ancestor")
         return {
             "checks": {
                 "local_tag_exists": True,
-                "local_tag_points_at_head": True,
+                "local_tag_target_is_ancestor_of_head": True,
                 "tag_target": target,
                 "head": head,
                 "post_publication_mode": True,
