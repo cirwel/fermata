@@ -44,6 +44,7 @@ EXPECTED_SDIST_FILES = {
     "references/recovery-evidence-templates-v0/service-reconciliation-report-template.json",
     "references/governed-effect-ir-v0.schema.json",
     "references/tongue-golden-tests-v0.json",
+    "scripts/check_local_alpha_release_candidate.py",
     "scripts/check_local_service.py",
     "scripts/check_local_alpha_release_artifacts.py",
     "scripts/check_package_build.py",

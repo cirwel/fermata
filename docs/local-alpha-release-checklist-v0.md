@@ -54,6 +54,12 @@ Check those release artifacts with:
 python3 scripts/check_local_alpha_release_artifacts.py
 ```
 
+Dry-run the release candidate from a clean Git worktree with:
+
+```bash
+python3 scripts/check_local_alpha_release_candidate.py
+```
+
 ## Gates Covered
 
 The validator currently covers:
@@ -79,6 +85,9 @@ The validator currently covers:
   a fresh packet from an actual loopback local service run;
 - release artifact checks that keep the versioned local-alpha notes and tag
   checklist aligned with package metadata and validator gates;
+- release-candidate dry run checks that create a temporary detached worktree at
+  the candidate commit, run the release artifact checker and full validator
+  there, and prove the dry run did not create the intended tag;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -98,6 +107,8 @@ Before presenting a local alpha:
   rollback, approval, or production incident response;
 - versioned release notes and tag checklist name the same package version, tag,
   validator command, CI evidence, and non-claims;
+- the release-candidate dry run passes from a clean `main` checkout matching
+  `origin/main` before any tag is created;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
@@ -113,7 +124,13 @@ python3 scripts/validate_local_alpha.py
 ```
 
 and the top-level JSON status. If the change discusses publication or tagging,
-also include the passing CI run for the release commit.
+also include:
+
+```bash
+python3 scripts/check_local_alpha_release_candidate.py
+```
+
+and the passing CI run for the release commit.
 
 ## Still Not v1
 

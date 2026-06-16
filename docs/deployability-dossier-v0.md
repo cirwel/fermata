@@ -62,6 +62,10 @@ The current repo proves a smaller but real core:
   export and checked by `scripts/check_recovery_evidence_example.py`;
 - versioned local-alpha release notes and a tag checklist in `docs/releases/`,
   checked by `scripts/check_local_alpha_release_artifacts.py`;
+- a release-candidate dry-run command in
+  `scripts/check_local_alpha_release_candidate.py` that creates a temporary
+  detached worktree at the candidate commit, runs the release artifact checker
+  and local-alpha validator there, and verifies no release tag was created;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -150,6 +154,11 @@ publication packet separately from the runtime claim. The packet names the
 package version, intended tag, validator command, required CI evidence, and
 non-claims before a maintainer creates a tag.
 
+The release-candidate dry run now rehearses the tag checklist from a temporary
+detached worktree at the candidate commit. It is intentionally pre-tag evidence:
+it proves the release packet and local-alpha validator pass without creating or
+pushing `v0.1.0`.
+
 ## 4. Readiness Matrix
 
 | Area | Current status | Deployable gate |
@@ -166,6 +175,7 @@ non-claims before a maintainer creates a tag.
 | Recovery evidence | Incident and reconciliation templates exist | `check_recovery_evidence` stays green |
 | Recovery example | Filled local service packet example exists | `check_recovery_evidence_example` stays green |
 | Release artifacts | Versioned local-alpha notes and tag checklist exist | `check_local_alpha_release_artifacts` stays green |
+| Release candidate | Clean-worktree dry run exists | `check_local_alpha_release_candidate` passes before tagging |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -200,5 +210,6 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Run a release-candidate dry run from a fresh clone or clean worktree, using the
-versioned tag checklist without creating or pushing the tag.
+Promote the local-alpha packet into an explicit release-candidate record that
+names the merged commit, CI run URLs, and dry-run evidence, still without
+creating or pushing the tag.
