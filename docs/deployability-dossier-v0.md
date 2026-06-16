@@ -51,6 +51,8 @@ The current repo proves a smaller but real core:
   `scripts/check_run_bundle_contract.py`;
 - documented local runtime API in `docs/runtime-api-v0.md` with executable
   coverage in `scripts/check_runtime_api.py`;
+- checked package build gate for wheel, sdist, source manifest contents, and
+  installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
   `scripts/validate_local_alpha.py`;
 - package metadata with console entry points for the local adapter spike,
@@ -123,6 +125,10 @@ run adapter/interpreter self-tests
 check package metadata and console entry points
 ```
 
+The local alpha validator now includes package build evidence. It builds from a
+clean temporary source copy so ignored local build artifacts cannot contaminate
+the wheel.
+
 ## 4. Readiness Matrix
 
 | Area | Current status | Deployable gate |
@@ -135,7 +141,7 @@ check package metadata and console entry points
 | Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
 | Runtime API | Local alpha import surface exists | `check_runtime_api` stays green |
 | Service mode | Missing | Loopback-only local alpha with append-only records |
-| Packaging | Basic metadata and local-alpha validator exist | Wheel/sdist build and entry-point check pass |
+| Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
 ## 5. Milestone Slices
@@ -169,5 +175,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add the package gate slice: check wheel/sdist build and installed console entry
-points after the current local-alpha validation command.
+Add the local service slice: a loopback-only service prototype with append-only
+records and explicit non-production boundaries.

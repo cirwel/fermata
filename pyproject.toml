@@ -10,7 +10,7 @@ keywords = ["ai-agents", "governance", "effects", "runtime", "programming-langua
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["jsonschema>=4.0"]
+dev = ["build>=1.0", "jsonschema>=4.0"]
 
 [project.scripts]
 fermata = "fermata.cli:main"
