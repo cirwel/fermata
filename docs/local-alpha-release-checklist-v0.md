@@ -60,6 +60,9 @@ The validator currently covers:
   rejected, and committed outcomes without shelling out;
 - loopback local service checks for health, interpret, run, service-root
   confinement, non-loopback bind rejection, and append-only records;
+- recovery evidence template checks for service incident and reconciliation
+  reports, including stream names, wrapper record types, and sample
+  classifications;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -74,6 +77,8 @@ Before presenting a local alpha:
 - no secrets, credentials, tokens, passwords, or connection strings are present;
 - examples remain local sandbox examples;
 - service runs only on loopback hosts and remains labeled non-production;
+- recovery evidence templates remain evidence packets, not automatic retry,
+  rollback, approval, or production incident response;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
@@ -102,6 +107,7 @@ Passing local alpha validation does not imply:
 - OS-level adapter process isolation is implemented;
 - multi-user approval queues exist;
 - trace records are cryptographically sealed;
+- recovery templates automatically reconcile or repair service records;
 - Fermata is a general-purpose programming language.
 
 It means the checked-in local runtime, JSON records, CLI path, runtime API,

@@ -160,3 +160,22 @@ The checker starts the installed `fermata service run` command on
 - `--host 0.0.0.0` is rejected.
 
 This check is part of `python3 scripts/validate_local_alpha.py`.
+
+## Recovery Evidence
+
+When reviewing service incidents or incomplete local runs, use the recovery
+evidence templates in:
+
+```text
+references/recovery-evidence-templates-v0/
+```
+
+The packet is documented in [recovery-evidence-v0.md](recovery-evidence-v0.md)
+and checked by:
+
+```bash
+python3 scripts/check_recovery_evidence.py
+```
+
+The templates are evidence records only. They do not add automatic retry,
+rollback, approval, trace lookup, or production incident response.

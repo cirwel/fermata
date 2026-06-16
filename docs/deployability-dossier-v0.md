@@ -53,6 +53,9 @@ The current repo proves a smaller but real core:
   coverage in `scripts/check_runtime_api.py`;
 - loopback-only local service prototype in `docs/local-service-v0.md` with
   subprocess coverage in `scripts/check_local_service.py`;
+- recovery evidence templates for local service incidents and reconciliation in
+  `docs/recovery-evidence-v0.md`, checked by
+  `scripts/check_recovery_evidence.py`;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -146,6 +149,7 @@ the wheel.
 | Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
 | Runtime API | Local alpha import surface exists | `check_runtime_api` stays green |
 | Service mode | Loopback local alpha service exists | `check_local_service` stays green |
+| Recovery evidence | Incident and reconciliation templates exist | `check_recovery_evidence` stays green |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -159,7 +163,7 @@ the wheel.
    local-alpha validation command.
 5. **Local service slice**: add a loopback-only service prototype after the CLI
    and bundle boundaries are executable.
-6. **Recovery evidence slice**: add incident/reconciliation templates only once
+6. **Recovery evidence slice**: add incident/reconciliation templates once
    service records exist.
 
 Each slice should land with denial-path evidence, not only success cases.
@@ -180,5 +184,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add recovery evidence templates for local service incidents and reconciliation
-only after service records exist.
+Add read-only trace lookup/export over local service records so operators can
+prepare recovery evidence without hand-copying JSONL lines.
