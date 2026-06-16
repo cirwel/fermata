@@ -128,6 +128,10 @@ src/
     self_tests.py
     service_records.py
     service.py
+    reference_data/
+      governed-effect-ir-v0.schema.json
+      tongue-golden-tests-v0.json
+      ai-native-tongue-seed-corpus-v0.jsonl
 ```
 
 ## Runtime state model
@@ -196,7 +200,9 @@ JSONL memory record appended and fsynced under the scoped sandbox
 ## Quickstart
 
 The v0 runtime code uses only the Python standard library. The schema-validating
-golden checks use the `dev` extra.
+golden checks use the `dev` extra. The installed `fermata-golden-checks`
+command falls back to packaged reference data when no checkout-local
+`references/` tree is present.
 
 ```bash
 python3 -m pip install -e '.[dev]'

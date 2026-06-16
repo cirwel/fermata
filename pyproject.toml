@@ -31,5 +31,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"fermata.reference_data" = ["*.json", "*.jsonl"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "scripts"]

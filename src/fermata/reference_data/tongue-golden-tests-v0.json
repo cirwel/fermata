@@ -1,0 +1,375 @@
+{
+  "schema_version": "0.1",
+  "parser": [
+    {
+      "input": "need file.read target:\"docs/charter.md\" because:\"verify before editing\"",
+      "expected_speech_act": "need",
+      "expected_payload": {
+        "need": {
+          "capability": "file.read",
+          "target": "docs/charter.md"
+        }
+      }
+    },
+    {
+      "input": "claim \"effect creation is not effect execution\" evidence:[state_machine]",
+      "expected_speech_act": "claim",
+      "expected_payload": {
+        "claim": "effect creation is not effect execution"
+      },
+      "expected_evidence": [
+        "state_machine"
+      ]
+    },
+    {
+      "input": "doubt target_path because:\"may escape scope\"",
+      "expected_speech_act": "doubt",
+      "expected_payload": {
+        "doubt": "target_path"
+      },
+      "expected_reason": "may escape scope"
+    },
+    {
+      "input": "remember project \"scope must narrow on delegation\"",
+      "expected_speech_act": "remember",
+      "expected_payload": {
+        "lifespan": "project",
+        "memory_candidate": "scope must narrow on delegation"
+      }
+    },
+    {
+      "input": "boundary cannot commit effect:file.write reason:approval_missing offer:dry_run",
+      "expected_speech_act": "boundary",
+      "expected_payload": {
+        "boundary": "cannot commit effect:file.write",
+        "offer": "dry_run"
+      },
+      "expected_reason": "approval_missing"
+    }
+  ],
+  "renderer": [
+    {
+      "record": {
+        "schema_version": "0.1",
+        "record_type": "proposal",
+        "proposal_id": "gold_need_001",
+        "actor": "agent:hermes",
+        "speech_act": "need",
+        "reason": "verify before editing",
+        "confidence": 0.93,
+        "evidence": [
+          "rule:read_first"
+        ],
+        "payload": {
+          "utterance": "need file.read target:\"docs/charter.md\" because:\"verify before editing\"",
+          "need": {
+            "kind": "tool",
+            "capability": "file.read",
+            "target": "docs/charter.md"
+          }
+        }
+      },
+      "expected_contains": [
+        "I need",
+        "`file.read`",
+        "`docs/charter.md`",
+        "verify before editing",
+        "Confidence: 0.93"
+      ]
+    },
+    {
+      "record": {
+        "schema_version": "0.1",
+        "record_type": "proposal",
+        "proposal_id": "gold_boundary_001",
+        "actor": "agent:hermes",
+        "speech_act": "boundary",
+        "reason": "approval_missing",
+        "confidence": 0.9,
+        "evidence": [
+          "approval:absent"
+        ],
+        "payload": {
+          "utterance": "boundary cannot commit effect:file.write reason:approval_missing offer:dry_run",
+          "boundary": "cannot commit file.write without required approval",
+          "offer": "render dry-run and request approval"
+        }
+      },
+      "expected_contains": [
+        "Boundary:",
+        "cannot commit",
+        "offer",
+        "request approval"
+      ]
+    }
+  ],
+  "file_write_adapter": [
+    {
+      "name": "non_intent_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "proposal_is_not_an_intent"
+    },
+    {
+      "name": "content_missing_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "content_missing_or_not_string"
+    },
+    {
+      "name": "directory_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_is_directory"
+    },
+    {
+      "name": "adapter_error_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "adapter_commit_failed"
+    },
+    {
+      "name": "allowed_write_commits",
+      "expected_state": "committed",
+      "expected_trace_contains": [
+        "proposal.received",
+        "intent.created",
+        "policy.checked",
+        "dry_run.rendered",
+        "adapter.commit.started",
+        "effect.committed"
+      ]
+    },
+    {
+      "name": "path_escape_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_outside_scope"
+    },
+    {
+      "name": "missing_capability_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "missing_capability"
+    },
+    {
+      "name": "approval_required_pauses",
+      "expected_state": "paused",
+      "expected_required_input": "approval_decision"
+    },
+    {
+      "name": "explicit_approval_write_commits",
+      "expected_state": "committed"
+    },
+    {
+      "name": "approval_denied_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "approval_denied"
+    },
+    {
+      "name": "approval_intent_hash_mismatch_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "approval_intent_hash_mismatch"
+    },
+    {
+      "name": "capability_spoof_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "unsupported_capability_for_operation"
+    },
+    {
+      "name": "target_not_string_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_missing_or_not_string"
+    },
+    {
+      "name": "input_not_object_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_missing_or_not_object"
+    },
+    {
+      "name": "restrictive_umask_file_write_commits_verified",
+      "expected_state": "committed"
+    },
+    {
+      "name": "target_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_is_symlink"
+    },
+    {
+      "name": "late_target_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_is_symlink"
+    },
+    {
+      "name": "path_component_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_component_is_symlink"
+    },
+    {
+      "name": "late_path_component_is_symlink_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_component_is_symlink"
+    },
+    {
+      "name": "target_exists_no_overwrite_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_exists_no_overwrite"
+    },
+    {
+      "name": "late_target_exists_no_overwrite_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_exists_no_overwrite"
+    },
+    {
+      "name": "target_exists_with_overwrite_commits",
+      "expected_state": "committed"
+    }
+  ],
+  "memory_write_adapter": [
+    {
+      "name": "allowed_memory_write_commits",
+      "expected_state": "committed",
+      "trace_events_key": "allowed_memory_write_trace_events",
+      "expected_trace_contains": [
+        "proposal.received",
+        "intent.created",
+        "policy.checked",
+        "dry_run.rendered",
+        "adapter.commit.started",
+        "effect.committed"
+      ]
+    },
+    {
+      "name": "memory_content_missing_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_content_missing_or_not_string"
+    },
+    {
+      "name": "memory_missing_capability_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "missing_capability"
+    },
+    {
+      "name": "memory_approval_required_pauses",
+      "expected_state": "paused",
+      "expected_required_input": "approval_decision"
+    },
+    {
+      "name": "memory_empty_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_dot_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_path_escape_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_outside_scope"
+    },
+    {
+      "name": "memory_distinct_targets_do_not_collide",
+      "expected_state": "committed"
+    },
+    {
+      "name": "memory_capability_spoof_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "unsupported_capability_for_operation"
+    },
+    {
+      "name": "memory_malformed_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_target_not_string_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "target_missing_or_not_string"
+    },
+    {
+      "name": "memory_input_not_object_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_missing_or_not_object"
+    },
+    {
+      "name": "memory_malformed_shape_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_lifespan_invalid_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_lifespan_invalid"
+    },
+    {
+      "name": "memory_record_too_large_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "input_too_large"
+    },
+    {
+      "name": "memory_tampered_hash_store_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_store_unreadable"
+    },
+    {
+      "name": "memory_reserved_suffix_target_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "memory_target_reserved_suffix"
+    },
+    {
+      "name": "memory_restrictive_umask_commits_verified",
+      "expected_state": "committed"
+    }
+  ],
+  "interpreter": [
+    {
+      "name": "interpret_file_write_approved_without_committing",
+      "expected_state": "approved",
+      "trace_events_key": "interpret_file_write_approved_trace_events",
+      "expected_trace_contains": ["proposal.received", "intent.created", "policy.checked", "dry_run.rendered", "approval.granted"],
+      "expected_trace_excludes": ["adapter.commit.started", "effect.committed"]
+    },
+    {
+      "name": "interpret_file_write_paused_without_committing",
+      "expected_state": "paused",
+      "expected_required_input": "approval_decision"
+    },
+    {
+      "name": "interpret_file_write_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "path_outside_scope"
+    },
+    {
+      "name": "interpret_non_intent_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "proposal_is_not_an_intent"
+    },
+    {
+      "name": "interpret_unsupported_adapter_rejected",
+      "expected_state": "rejected",
+      "expected_reason": "unsupported_adapter_for_interpret"
+    },
+    {
+      "name": "interpret_memory_write_approved_without_committing",
+      "expected_state": "approved"
+    }
+  ],
+  "cli": [
+    {
+      "name": "cli_interpret_approval_required_pauses",
+      "expected_state": "paused",
+      "expected_required_input": "approval_decision",
+      "trace_events_key": "cli_interpret_approval_required_trace_events",
+      "expected_trace_contains": ["approval.requested"],
+      "expected_trace_excludes": ["adapter.commit.started", "effect.committed"]
+    },
+    {
+      "name": "cli_run_approved_commits",
+      "expected_state": "committed",
+      "trace_events_key": "cli_run_approved_trace_events",
+      "expected_trace_contains": ["adapter.commit.started", "effect.committed"]
+    }
+  ],
+  "trace_ledger": [
+    {
+      "name": "trace_ledger_append_verified",
+      "expected_status": "verified"
+    }
+  ]
+}

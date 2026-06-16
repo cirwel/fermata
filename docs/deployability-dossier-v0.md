@@ -77,12 +77,14 @@ The current repo proves a smaller but real core:
   approval by default and, after approval is supplied, reruns strict checks
   without creating or pushing the tag; after publication, the same default gate
   accepts a local release tag only when its target is an ancestor of `HEAD`;
-- checked package build gate for wheel, sdist, source manifest contents, and
-  installed console entry points in `scripts/check_package_build.py`;
+- checked package build gate for wheel, sdist, source manifest contents,
+  packaged reference data, and installed console entry points in
+  `scripts/check_package_build.py`;
 - a current local-alpha validation command in
   `scripts/validate_local_alpha.py`;
 - package metadata with console entry points for the local adapter spike,
-  local alpha validator, parser, renderer, and golden checks.
+  local alpha validator, parser, renderer, and golden checks that can run from
+  packaged reference data outside a source checkout.
 
 That is enough for a runtime seed. It is not yet enough for a deployable tool
 people can depend on.
@@ -206,7 +208,7 @@ pre-tag checks and still only returns the exact commands to run next.
 | Candidate record | Concrete pre-tag evidence record exists | `check_local_alpha_release_candidate_record` stays green |
 | Tag approval packet | Pre-tag maintainer approval packet exists | `check_local_alpha_tag_approval_packet` stays green before tagging |
 | Tag publication preflight | Executable final no-effect hold exists | Missing approval is rejected pre-tag; post-tag local tag target must be an ancestor of `HEAD` |
-| Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
+| Packaging | Wheel/sdist, packaged fixtures, and entry-point gate exist | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
 ## 5. Milestone Slices

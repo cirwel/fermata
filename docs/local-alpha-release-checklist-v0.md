@@ -126,8 +126,8 @@ The validator currently covers:
   publication, accept an existing local release tag only when it points at
   an ancestor of `HEAD`, and after approval is supplied, rerun strict release
   checks without creating or pushing the tag;
-- package build checks for wheel, sdist, source manifest contents, and installed
-  console entry points;
+- package build checks for wheel, sdist, source manifest contents, packaged
+  reference data, and installed console entry points;
 - `git diff --check`.
 
 ## Release-Ready Conditions
