@@ -19,6 +19,7 @@ tag. Tagging remains a separate governed source-control effect.
 - Tag checklist: `docs/releases/local-alpha-v0.1.0-tag-checklist.md`
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
+- Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
 - Release scope: local runtime seed, local CLI/API, loopback service, and
   evidence fixtures.
 
@@ -52,6 +53,8 @@ Before `v0.1.0` is created or pushed, attach evidence that:
 - `python3 scripts/check_local_alpha_release_artifacts.py` passed;
 - `python3 scripts/check_local_alpha_release_candidate.py` passed from a clean
   `main` checkout matching `origin/main`;
+- `python3 scripts/check_local_alpha_release_candidate_record.py` passed for
+  `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`;
 - `git status --short --branch` was clean on the release commit;
 - the release commit matches the commit named in the tag checklist;
 - no secrets, credentials, tokens, passwords, or connection strings were added;

@@ -66,6 +66,9 @@ The current repo proves a smaller but real core:
   `scripts/check_local_alpha_release_candidate.py` that creates a temporary
   detached worktree at the candidate commit, runs the release artifact checker
   and local-alpha validator there, and verifies no release tag was created;
+- a concrete local-alpha release-candidate record in
+  `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`, checked by
+  `scripts/check_local_alpha_release_candidate_record.py`;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -159,6 +162,10 @@ detached worktree at the candidate commit. It is intentionally pre-tag evidence:
 it proves the release packet and local-alpha validator pass without creating or
 pushing `v0.1.0`.
 
+The release-candidate record captures the concrete pre-tag candidate evidence:
+the candidate commit, CI run URLs, strict dry-run summary, local-alpha validator
+gate list, and explicit non-effects for tag creation and push.
+
 ## 4. Readiness Matrix
 
 | Area | Current status | Deployable gate |
@@ -176,6 +183,7 @@ pushing `v0.1.0`.
 | Recovery example | Filled local service packet example exists | `check_recovery_evidence_example` stays green |
 | Release artifacts | Versioned local-alpha notes and tag checklist exist | `check_local_alpha_release_artifacts` stays green |
 | Release candidate | Clean-worktree dry run exists | `check_local_alpha_release_candidate` passes before tagging |
+| Candidate record | Concrete pre-tag evidence record exists | `check_local_alpha_release_candidate_record` stays green |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -210,6 +218,6 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Promote the local-alpha packet into an explicit release-candidate record that
-names the merged commit, CI run URLs, and dry-run evidence, still without
-creating or pushing the tag.
+Prepare the maintainer approval packet for the `v0.1.0` tag effect, including
+the exact command to run and the evidence that must be rechecked immediately
+before tag creation.

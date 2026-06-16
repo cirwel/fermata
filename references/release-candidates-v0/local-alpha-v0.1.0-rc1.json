@@ -1,0 +1,103 @@
+{
+  "schema_version": "0.1",
+  "record_type": "release_candidate",
+  "candidate_id": "local-alpha-v0.1.0-rc1",
+  "package_version": "0.1.0",
+  "intended_tag": "v0.1.0",
+  "candidate_commit": "54d149e734efad5ad21584ea8a8ef6cc581c5b42",
+  "candidate_commit_source": {
+    "pull_request": "https://github.com/cirwel/fermata/pull/27",
+    "merged_at": "2026-06-16T08:02:05Z",
+    "description": "main after the release-candidate dry-run checker landed"
+  },
+  "created_at": "2026-06-16T08:05:55Z",
+  "status": "pre_tag_candidate",
+  "publication_effects": {
+    "created_tag": false,
+    "pushed_tag": false,
+    "tag_name": "v0.1.0"
+  },
+  "ci_evidence": [
+    {
+      "workflow": "ci",
+      "check": "golden",
+      "conclusion": "SUCCESS",
+      "started_at": "2026-06-16T08:01:28Z",
+      "completed_at": "2026-06-16T08:01:49Z",
+      "url": "https://github.com/cirwel/fermata/actions/runs/27603158121/job/81608720994"
+    },
+    {
+      "workflow": "ci",
+      "check": "golden",
+      "conclusion": "SUCCESS",
+      "started_at": "2026-06-16T08:01:21Z",
+      "completed_at": "2026-06-16T08:01:40Z",
+      "url": "https://github.com/cirwel/fermata/actions/runs/27603146541/job/81608680653"
+    }
+  ],
+  "dry_run_evidence": {
+    "command": "python3 scripts/check_local_alpha_release_candidate.py",
+    "status": "passed",
+    "source": {
+      "allow_current_branch": false,
+      "branch": "main",
+      "head": "54d149e734efad5ad21584ea8a8ef6cc581c5b42",
+      "origin_main": "54d149e734efad5ad21584ea8a8ef6cc581c5b42",
+      "release_tag_exists_before": false,
+      "release_tag_exists_after": false,
+      "status_clean": true
+    },
+    "candidate_worktree": {
+      "head": "54d149e734efad5ad21584ea8a8ef6cc581c5b42",
+      "status_clean_before": true,
+      "status_clean_after": true,
+      "release_tag_exists_before": false,
+      "release_tag_exists_after": false,
+      "release_artifacts": {
+        "release_artifacts": "local-alpha-v0.1.0",
+        "status": "passed"
+      },
+      "validator": {
+        "status": "passed",
+        "checked": [
+          "compileall",
+          "schema_json",
+          "golden_json",
+          "golden_checks",
+          "cli_smoke",
+          "run_bundle_contract",
+          "runtime_api",
+          "local_service",
+          "recovery_evidence",
+          "recovery_evidence_example",
+          "release_artifacts",
+          "package_build",
+          "diff_check"
+        ],
+        "passed": [
+          "compileall",
+          "schema_json",
+          "golden_json",
+          "golden_checks",
+          "cli_smoke",
+          "run_bundle_contract",
+          "runtime_api",
+          "local_service",
+          "recovery_evidence",
+          "recovery_evidence_example",
+          "release_artifacts",
+          "package_build",
+          "diff_check"
+        ]
+      }
+    }
+  },
+  "non_claims": [
+    "No source-control tag has been created.",
+    "No source-control tag has been pushed.",
+    "This record is pre-tag evidence, not publication approval.",
+    "This record does not claim hosted production readiness.",
+    "This record does not claim remote adapter safety."
+  ],
+  "next_required_effect": "Maintainer approval is required before creating or pushing v0.1.0."
+}

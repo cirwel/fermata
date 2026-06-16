@@ -60,6 +60,12 @@ Dry-run the release candidate from a clean Git worktree with:
 python3 scripts/check_local_alpha_release_candidate.py
 ```
 
+Check the concrete candidate evidence record with:
+
+```bash
+python3 scripts/check_local_alpha_release_candidate_record.py
+```
+
 ## Gates Covered
 
 The validator currently covers:
@@ -88,6 +94,8 @@ The validator currently covers:
 - release-candidate dry run checks that create a temporary detached worktree at
   the candidate commit, run the release artifact checker and full validator
   there, and prove the dry run did not create the intended tag;
+- release-candidate record checks that tie a concrete candidate commit to CI,
+  dry-run, validator, and no-tag evidence;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -109,6 +117,8 @@ Before presenting a local alpha:
   validator command, CI evidence, and non-claims;
 - the release-candidate dry run passes from a clean `main` checkout matching
   `origin/main` before any tag is created;
+- the release-candidate record names the candidate commit, CI run URLs, dry-run
+  output, and no-tag status;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
@@ -128,6 +138,10 @@ also include:
 
 ```bash
 python3 scripts/check_local_alpha_release_candidate.py
+```
+
+```bash
+python3 scripts/check_local_alpha_release_candidate_record.py
 ```
 
 and the passing CI run for the release commit.
