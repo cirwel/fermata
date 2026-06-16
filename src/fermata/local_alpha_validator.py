@@ -68,6 +68,11 @@ def gates() -> list[Gate]:
             [python, "scripts/check_runtime_api.py"],
             parses_json=True,
         ),
+        Gate(
+            "package_build",
+            [python, "scripts/check_package_build.py"],
+            parses_json=True,
+        ),
         Gate("diff_check", ["git", "diff", "--check"]),
     ]
 

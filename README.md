@@ -62,6 +62,7 @@ committed effects.
 ```text
 CONTRIBUTING.md
 AGENTS.md
+MANIFEST.in
 .github/PULL_REQUEST_TEMPLATE.md
 docs/
   charter-v0.md
@@ -80,6 +81,7 @@ references/
   run-bundle-contract-fixtures-v0/
   tongue-golden-tests-v0.json
 scripts/
+  check_package_build.py
   check_run_bundle_contract.py
   check_runtime_api.py
   governed_effect_file_write_spike.py
@@ -183,6 +185,7 @@ python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
 fermata-golden-checks
 python3 scripts/check_runtime_api.py
+python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
 

@@ -58,6 +58,8 @@ The validator currently covers:
   rejected, and committed outcomes;
 - package-level runtime API checks for `interpret` and `run`, including paused,
   rejected, and committed outcomes without shelling out;
+- package build checks for wheel, sdist, source manifest contents, and installed
+  console entry points;
 - `git diff --check`.
 
 ## Release-Ready Conditions
@@ -69,6 +71,8 @@ Before presenting a local alpha:
 - no generated CLI smoke outputs are staged;
 - no secrets, credentials, tokens, passwords, or connection strings are present;
 - examples remain local sandbox examples;
+- wheel and sdist artifacts are built from a clean temporary source copy, not an
+  ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
   service readiness;
 - changes preserve proposal, intent, approval, and committed-effect boundaries.
