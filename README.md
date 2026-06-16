@@ -112,6 +112,7 @@ scripts/
   check_local_alpha_tag_approval_packet.py
   check_local_alpha_tag_publication_preflight.py
   check_run_bundle_contract.py
+  check_approval_surface.py
   check_recovery_evidence.py
   check_recovery_evidence_example.py
   check_runtime_api.py

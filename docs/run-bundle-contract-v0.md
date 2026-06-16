@@ -83,6 +83,34 @@ The command writes `effect.json` and `trace.json`, and prints:
 `fermata bundle run` refuses to overwrite existing `effect.json` or `trace.json`
 unless `--overwrite` is passed.
 
+## Approving a Paused Bundle
+
+When a bundle pauses awaiting approval (`effect.state == "paused"`,
+`effect.required_input == "approval_decision"`), a steward decides without
+hand-editing JSON:
+
+```bash
+fermata approve path/to/bundle --render-only   # show what is pending
+fermata approve path/to/bundle --yes           # approve and re-run
+fermata approve path/to/bundle --deny          # deny and re-run
+fermata approve path/to/bundle                 # prompt y/N (interactive only)
+```
+
+The command reads the pending effect, writes `approval.json` as a canonical
+approval record **bound to the bundle's scope and intent hash**, then re-runs
+the bundle so `effect.json` / `trace.json` reflect the outcome:
+
+- `--yes` records an `approved` decision; an admissible effect becomes
+  `committed`.
+- `--deny` records a `denied` decision; the effect becomes `rejected` with
+  `rejection_reason: "approval_denied"` and no side effect is committed.
+- `--render-only` prints a plain-English summary and the pending effect without
+  recording any decision.
+
+`fermata approve` refuses a bundle that is not paused for approval, and — for
+non-interactive use (no TTY) — refuses to proceed without an explicit `--yes`
+or `--deny`, so nothing commits by default.
+
 ## State Expectations
 
 With required approval and no `approval.json`:
