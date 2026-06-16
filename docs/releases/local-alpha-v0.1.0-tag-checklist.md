@@ -18,6 +18,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - Release notes: `docs/releases/local-alpha-v0.1.0.md`
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
+- Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
 - Release commit: `<fill-with-merged-main-commit-before-tagging>`
 
 ## Required Checks
@@ -27,6 +28,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - [ ] Run `python3 scripts/check_local_alpha_release_artifacts.py`.
 - [ ] Run `python3 scripts/check_local_alpha_release_candidate.py` from a clean
       `main` checkout matching `origin/main`.
+- [ ] Run `python3 scripts/check_local_alpha_release_candidate_record.py`.
 - [ ] Run `python3 scripts/validate_local_alpha.py` and attach the top-level
       `"status": "passed"` result.
 - [ ] Confirm GitHub Actions `ci / golden` passed on the exact release commit.
@@ -58,6 +60,7 @@ git push origin v0.1.0
 - GitHub Actions `ci / golden` URL for the release commit;
 - package build checker summary;
 - release-candidate dry-run summary;
+- release-candidate record summary;
 - maintainer approval reference.
 
 ## Roll-Forward Rule

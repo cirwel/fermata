@@ -13,9 +13,15 @@ RELEASE_VERSION = "0.1.0"
 RELEASE_TAG = f"v{RELEASE_VERSION}"
 RELEASE_NOTES = Path("docs/releases/local-alpha-v0.1.0.md")
 TAG_CHECKLIST = Path("docs/releases/local-alpha-v0.1.0-tag-checklist.md")
+RELEASE_CANDIDATE_RECORD = Path(
+    "references/release-candidates-v0/local-alpha-v0.1.0-rc1.json"
+)
 VALIDATOR_COMMAND = "python3 scripts/validate_local_alpha.py"
 RELEASE_CHECK_COMMAND = "python3 scripts/check_local_alpha_release_artifacts.py"
 RELEASE_CANDIDATE_COMMAND = "python3 scripts/check_local_alpha_release_candidate.py"
+RELEASE_CANDIDATE_RECORD_COMMAND = (
+    "python3 scripts/check_local_alpha_release_candidate_record.py"
+)
 
 
 def repo_root() -> Path:
@@ -81,6 +87,7 @@ def check_release_notes(notes: str, gate_names: list[str]) -> dict[str, Any]:
         f"Intended tag: `{RELEASE_TAG}`",
         f"Required validator: `{VALIDATOR_COMMAND}`",
         f"Release-candidate dry run: `{RELEASE_CANDIDATE_COMMAND}`",
+        f"Release-candidate record: `{RELEASE_CANDIDATE_RECORD}`",
         "proposal, intent, approval, and committed-effect boundaries",
         "hosted production readiness",
         "authenticated multi-user operation",
@@ -109,6 +116,8 @@ def check_tag_checklist(checklist: str) -> dict[str, Any]:
         f"Required validator: `{VALIDATOR_COMMAND}`",
         RELEASE_CHECK_COMMAND,
         RELEASE_CANDIDATE_COMMAND,
+        RELEASE_CANDIDATE_RECORD_COMMAND,
+        str(RELEASE_CANDIDATE_RECORD),
         "Release commit: `<fill-with-merged-main-commit-before-tagging>`",
         "GitHub Actions `ci / golden`",
         "maintainer approval",
@@ -135,6 +144,7 @@ def run_checks(*, root: Path | None = None) -> dict[str, Any]:
     gate_names = local_alpha_gate_names(repo)
     notes = read_text(repo, RELEASE_NOTES)
     checklist = read_text(repo, TAG_CHECKLIST)
+    read_text(repo, RELEASE_CANDIDATE_RECORD)
     notes_result = check_release_notes(notes, gate_names)
     checklist_result = check_tag_checklist(checklist)
     return {
