@@ -208,6 +208,12 @@ fermata run \
   --sandbox-root /tmp/fermata-cli
 ```
 
+To run the same installed-command path as a repeatable smoke test:
+
+```bash
+python3 scripts/run_cli_smoke.py
+```
+
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept
 for continuity with the first boring adapter.
 
