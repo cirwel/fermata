@@ -84,6 +84,11 @@ def gates() -> list[Gate]:
             parses_json=True,
         ),
         Gate(
+            "release_artifacts",
+            [python, "scripts/check_local_alpha_release_artifacts.py"],
+            parses_json=True,
+        ),
+        Gate(
             "package_build",
             [python, "scripts/check_package_build.py"],
             parses_json=True,

@@ -74,6 +74,9 @@ docs/
   local-alpha-release-checklist-v0.md
   local-service-v0.md
   recovery-evidence-v0.md
+  releases/
+    local-alpha-v0.1.0.md
+    local-alpha-v0.1.0-tag-checklist.md
   run-bundle-contract-v0.md
   runtime-api-v0.md
   ugly-trace-v0.md
@@ -87,6 +90,7 @@ references/
 scripts/
   check_package_build.py
   check_local_service.py
+  check_local_alpha_release_artifacts.py
   check_run_bundle_contract.py
   check_recovery_evidence.py
   check_recovery_evidence_example.py
@@ -197,6 +201,7 @@ python3 scripts/check_runtime_api.py
 python3 scripts/check_local_service.py
 python3 scripts/check_recovery_evidence.py
 python3 scripts/check_recovery_evidence_example.py
+python3 scripts/check_local_alpha_release_artifacts.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
@@ -211,6 +216,9 @@ The distance from the current runtime seed to a deployable local alpha is tracke
 in [docs/deployability-dossier-v0.md](docs/deployability-dossier-v0.md).
 The current local-alpha gate is documented in
 [docs/local-alpha-release-checklist-v0.md](docs/local-alpha-release-checklist-v0.md).
+Versioned local-alpha release notes and the tag checklist live in
+[docs/releases/local-alpha-v0.1.0.md](docs/releases/local-alpha-v0.1.0.md) and
+[docs/releases/local-alpha-v0.1.0-tag-checklist.md](docs/releases/local-alpha-v0.1.0-tag-checklist.md).
 
 To see the local adapter evidence directly:
 
