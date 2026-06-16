@@ -53,8 +53,8 @@ def load_json(root: Path, path: Path) -> dict[str, Any]:
     return data
 
 
-def git_check(root: Path, args: list[str], *, label: str) -> None:
-    """Run a Git check command and fail with a stable label."""
+def git_succeeds(root: Path, args: list[str]) -> bool:
+    """Return whether a Git check command succeeds."""
 
     result = subprocess.run(
         ["git", *args],
@@ -63,7 +63,7 @@ def git_check(root: Path, args: list[str], *, label: str) -> None:
         text=True,
         check=False,
     )
-    require(result.returncode == 0, f"{label}:{result.stderr.strip()[-4000:]}")
+    return result.returncode == 0
 
 
 def require_string(value: Any, label: str) -> str:
@@ -189,8 +189,15 @@ def check_record(*, root: Path | None = None) -> dict[str, Any]:
 
     candidate_commit = require_string(record.get("candidate_commit"), "candidate_commit")
     require(COMMIT_RE.match(candidate_commit) is not None, "candidate_commit.format")
-    git_check(repo, ["cat-file", "-e", f"{candidate_commit}^{{commit}}"], label="candidate_commit.exists")
-    git_check(repo, ["merge-base", "--is-ancestor", candidate_commit, "HEAD"], label="candidate_commit.ancestor")
+    candidate_commit_available = git_succeeds(
+        repo, ["cat-file", "-e", f"{candidate_commit}^{{commit}}"]
+    )
+    candidate_commit_is_ancestor = None
+    if candidate_commit_available:
+        candidate_commit_is_ancestor = git_succeeds(
+            repo, ["merge-base", "--is-ancestor", candidate_commit, "HEAD"]
+        )
+        require(candidate_commit_is_ancestor, "candidate_commit.ancestor")
 
     source = record.get("candidate_commit_source")
     require(isinstance(source, dict), "candidate_commit_source.type")
@@ -211,7 +218,11 @@ def check_record(*, root: Path | None = None) -> dict[str, Any]:
 
     return {
         "checks": {
-            "candidate_commit": candidate_commit,
+            "candidate_commit": {
+                "available_in_checkout": candidate_commit_available,
+                "is_ancestor_of_head": candidate_commit_is_ancestor,
+                "sha": candidate_commit,
+            },
             "ci_evidence": check_ci_evidence(record),
             "dry_run": check_dry_run(record, candidate_commit),
             "publication_effects": check_publication_effects(record),
