@@ -486,6 +486,10 @@ def evaluate_with_adapter(
                 effect_id=prior_effect.get("effect_id"),
                 committed_at=prior_effect.get("committed_at"),
             )
+            # Approval is intentionally NOT re-evaluated on replay: the effect
+            # already committed in the external world, so this is informational,
+            # not a new authorization. The original approval record is carried
+            # through unchanged so the replayed result keeps its audit binding.
             return EffectResult(
                 state=EffectState.COMMITTED,
                 trace_id=trace.trace_id,
@@ -495,6 +499,7 @@ def evaluate_with_adapter(
                 scope_id=scope.scope_id,
                 acknowledgement=prior_effect.get("acknowledgement"),
                 verification=prior_effect.get("verification"),
+                approval=prior_effect.get("approval"),
                 committed_at=prior_effect.get("committed_at"),
             ), trace
 

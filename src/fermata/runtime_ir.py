@@ -120,6 +120,12 @@ class Intent:
     # most once per (scope, key): a later proposal with the same key returns the
     # prior committed result instead of re-running the adapter. Excluded from
     # intent_sha256 when None so existing intent hashes are unchanged.
+    #
+    # At-most-once holds for SERIAL callers. The lookup and the record are not
+    # held under one lock, so two concurrent commits with the same (scope, key)
+    # can both miss and both commit (a double effect). That is acceptable for
+    # the local-alpha single-writer model; multi-writer use would need a lock or
+    # transactional store.
     idempotency_key: str | None = None
 
 

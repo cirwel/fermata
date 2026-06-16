@@ -110,6 +110,23 @@ def optional_string_list(record: JsonObject, field: str, *, label: str) -> list[
     return value
 
 
+def _optional_idempotency_key(record: JsonObject) -> str | None:
+    """Read an optional idempotency_key, rejecting a malformed (non-string) value.
+
+    Absent or null is fine (keyless). A present-but-non-string value is a
+    malformed intent and is rejected rather than silently treated as keyless.
+    """
+
+    value = record.get("idempotency_key")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise RuntimeApiError(
+            "intent.idempotency_key must be a non-empty string when present"
+        )
+    return value
+
+
 def intent_from_record(record: JsonObject) -> Intent:
     """Lower a canonical intent record into the runtime dataclass."""
 
@@ -126,11 +143,7 @@ def intent_from_record(record: JsonObject) -> Intent:
             "required_capability",
             label="intent",
         ),
-        idempotency_key=(
-            record.get("idempotency_key")
-            if isinstance(record.get("idempotency_key"), str)
-            else None
-        ),
+        idempotency_key=_optional_idempotency_key(record),
     )
 
 
