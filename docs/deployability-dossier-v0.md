@@ -51,6 +51,8 @@ The current repo proves a smaller but real core:
   `scripts/check_run_bundle_contract.py`;
 - documented local runtime API in `docs/runtime-api-v0.md` with executable
   coverage in `scripts/check_runtime_api.py`;
+- loopback-only local service prototype in `docs/local-service-v0.md` with
+  subprocess coverage in `scripts/check_local_service.py`;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -65,15 +67,17 @@ people can depend on.
 
 ### Product Surface
 
-Fermata needs one stable user-facing command that can evaluate checked-in
-records without writing Python glue. The current console commands prove pieces,
-but they do not yet form a coherent local workflow such as:
+Fermata now has one stable user-facing command that can evaluate checked-in
+records without writing Python glue:
 
 ```text
 fermata interpret --scope scope.json --proposal proposal.json
 fermata run --scope scope.json --proposal proposal.json --approval approval.json
-fermata trace show --trace-id trace_...
+fermata bundle run ./bundle
+fermata service run --host 127.0.0.1 --port 8765 --service-root /tmp/fermata-service
 ```
+
+Trace lookup/export remains a future service or CLI extension.
 
 ### Run Bundle Contract
 
@@ -108,10 +112,11 @@ remote safety are still outside the current claim.
 
 ### Service Boundary
 
-A service mode can be useful, but only after the local CLI and bundle contract
-are clear. The first service should be loopback-only, append-only, and labeled
-non-production until authentication, hosted persistence, process isolation, and
-remote adapter safety exist.
+The local service prototype is loopback-only, append-only, and labeled
+non-production. It exposes health, interpret, and run endpoints around the same
+runtime API used by the CLI. Authentication, hosted persistence, process
+isolation, approval queues, trace lookup/export, and remote adapter safety are
+still outside the current claim.
 
 ### Release Evidence
 
@@ -140,7 +145,7 @@ the wheel.
 | CLI workflow | Coherent local `fermata` command exists | `run_cli_smoke` stays green |
 | Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
 | Runtime API | Local alpha import surface exists | `check_runtime_api` stays green |
-| Service mode | Missing | Loopback-only local alpha with append-only records |
+| Service mode | Loopback local alpha service exists | `check_local_service` stays green |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -175,5 +180,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add the local service slice: a loopback-only service prototype with append-only
-records and explicit non-production boundaries.
+Add recovery evidence templates for local service incidents and reconciliation
+only after service records exist.

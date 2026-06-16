@@ -33,14 +33,17 @@ EXPECTED_SDIST_FILES = {
     "README.md",
     "docs/deployability-dossier-v0.md",
     "docs/local-alpha-release-checklist-v0.md",
+    "docs/local-service-v0.md",
     "docs/runtime-api-v0.md",
     "examples/local-alpha/file-scope.json",
     "references/governed-effect-ir-v0.schema.json",
     "references/tongue-golden-tests-v0.json",
+    "scripts/check_local_service.py",
     "scripts/check_package_build.py",
     "scripts/check_runtime_api.py",
     "scripts/validate_local_alpha.py",
     "src/fermata/runtime_api.py",
+    "src/fermata/service.py",
 }
 
 

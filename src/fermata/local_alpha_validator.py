@@ -69,6 +69,11 @@ def gates() -> list[Gate]:
             parses_json=True,
         ),
         Gate(
+            "local_service",
+            [python, "scripts/check_local_service.py"],
+            parses_json=True,
+        ),
+        Gate(
             "package_build",
             [python, "scripts/check_package_build.py"],
             parses_json=True,

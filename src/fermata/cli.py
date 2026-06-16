@@ -145,6 +145,16 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_run_parser = bundle_subparsers.add_parser("run")
     bundle_run_parser.add_argument("bundle_dir", type=Path)
     bundle_run_parser.add_argument("--overwrite", action="store_true")
+
+    service_parser = subparsers.add_parser("service")
+    service_subparsers = service_parser.add_subparsers(
+        dest="service_command",
+        required=True,
+    )
+    service_run_parser = service_subparsers.add_parser("run")
+    service_run_parser.add_argument("--host", default="127.0.0.1")
+    service_run_parser.add_argument("--port", type=int, default=8765)
+    service_run_parser.add_argument("--service-root", required=True, type=Path)
     return parser
 
 
@@ -154,6 +164,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "service":
+            from fermata.service import run_service
+
+            return run_service(
+                host=args.host,
+                port=args.port,
+                service_root=args.service_root,
+            )
         if args.command == "bundle":
             output = run_bundle(args.bundle_dir, overwrite=args.overwrite)
         else:
