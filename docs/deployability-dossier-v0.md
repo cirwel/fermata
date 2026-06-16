@@ -47,6 +47,8 @@ The current repo proves a smaller but real core:
 - schema, corpus, parser, renderer, adapter, interpreter, trace-ledger, and
   surface checks in `scripts/run_tongue_golden_tests.py`;
 - repeatable installed-command CLI smoke in `scripts/run_cli_smoke.py`;
+- checked local run-bundle contract in `docs/run-bundle-contract-v0.md` and
+  `scripts/check_run_bundle_contract.py`;
 - a current local-alpha validation command in
   `scripts/validate_local_alpha.py`;
 - package metadata with console entry points for the local adapter spike,
@@ -82,8 +84,9 @@ bundle/
   records/
 ```
 
-Without this, integrations depend on Python internals instead of a stable
-runtime boundary.
+The first local bundle contract now exists for `file.write` and `memory.write`.
+It still needs broader compatibility work before it should be treated as stable
+for remote or hosted integrations.
 
 ### Runtime API
 
@@ -124,7 +127,7 @@ check package metadata and console entry points
 | File adapter | Local proof exists | Denial and commit traces stay covered |
 | Memory adapter | Local proof exists | Denial and commit traces stay covered |
 | CLI workflow | Fragmented commands | One coherent `fermata` command |
-| Bundle contract | Missing | Orchestrator can submit a bundle without imports |
+| Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
 | Runtime API | Internal shape exists | Documented stable import surface |
 | Service mode | Missing | Loopback-only local alpha with append-only records |
 | Packaging | Basic metadata and local-alpha validator exist | Wheel/sdist build and entry-point check pass |
@@ -161,5 +164,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add the bundle slice: a checked directory contract that lets orchestrators submit
-scope, proposal, and approval records without importing Fermata internals.
+Add the runtime API slice: document and test the stable Python import surface for
+hosts that should not shell out to the CLI.

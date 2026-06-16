@@ -1,0 +1,26 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.82,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "input": {
+      "content": "Committed fixtures pin the run-bundle contract.\n"
+    },
+    "intent_id": "intent_contract_file_write_committed_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_committed_001",
+    "required_capability": "file.write",
+    "target": "committed-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"committed-note.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_committed_001",
+  "reason": "pin committed file.write bundle contract",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

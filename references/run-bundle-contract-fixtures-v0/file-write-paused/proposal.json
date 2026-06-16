@@ -1,0 +1,26 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.8,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "input": {
+      "content": "This paused fixture must not be written.\n"
+    },
+    "intent_id": "intent_contract_file_write_paused_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_paused_001",
+    "required_capability": "file.write",
+    "target": "paused-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"paused-note.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_paused_001",
+  "reason": "pin paused file.write bundle contract",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

@@ -1,0 +1,30 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.79,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "memory",
+    "input": {
+      "content": "This paused memory fixture must not be written.\n",
+      "lifespan": "project",
+      "provenance": [
+        "fixture:run-bundle-contract-v0"
+      ]
+    },
+    "intent_id": "intent_contract_memory_write_paused_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_memory_write_paused_001",
+    "required_capability": "memory.write",
+    "target": "project/paused"
+  },
+  "payload": {
+    "utterance": "intend memory.write target:\"project/paused\""
+  },
+  "proposal_id": "prop_contract_memory_write_paused_001",
+  "reason": "pin paused memory.write bundle contract",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

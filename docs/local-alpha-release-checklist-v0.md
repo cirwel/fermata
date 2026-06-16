@@ -54,6 +54,8 @@ The validator currently covers:
   trace ledger;
 - installed `fermata` CLI smoke, proving `interpret` pauses without writing and
   `run` commits with adapter acknowledgement and verification;
+- run-bundle contract fixtures for `file.write` and `memory.write` paused,
+  rejected, and committed outcomes;
 - `git diff --check`.
 
 ## Release-Ready Conditions

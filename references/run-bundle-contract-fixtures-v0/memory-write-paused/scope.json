@@ -1,0 +1,11 @@
+{
+  "approval_required_for": [
+    "memory.write"
+  ],
+  "capabilities": [
+    "memory.write"
+  ],
+  "max_bytes": 4096,
+  "sandbox_root": "sandbox",
+  "scope_id": "contract_memory_write_paused"
+}

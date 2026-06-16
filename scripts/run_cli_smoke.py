@@ -74,6 +74,7 @@ def main() -> int:
     scope = root / "examples" / "local-alpha" / "file-scope.json"
     proposal = root / "examples" / "local-alpha" / "file-write-proposal.json"
     approval = root / "examples" / "local-alpha" / "file-write-approval.json"
+    source_bundle = root / "examples" / "local-alpha" / "run-bundle"
     expected_content = "Fermata CLI writes only through governed adapters.\n"
 
     with tempfile.TemporaryDirectory(prefix="fermata_cli_smoke_") as tmp:
@@ -123,6 +124,20 @@ def main() -> int:
         assert "effect.committed" in committed_events
         assert target.read_text(encoding="utf-8") == expected_content
 
+        bundle = Path(tmp) / "run-bundle"
+        shutil.copytree(source_bundle, bundle)
+        bundle_target = bundle / "sandbox" / "bundle-note.txt"
+        bundle_output = run_json([fermata, "bundle", "run", str(bundle)])
+        assert bundle_output["status"] == "ok"
+        assert bundle_output["effect"]["state"] == "paused"
+        assert bundle_output["effect"]["required_input"] == "approval_decision"
+        bundle_events = event_types(bundle_output)
+        assert "approval.requested" in bundle_events
+        assert "adapter.commit.started" not in bundle_events
+        assert (bundle / "effect.json").exists()
+        assert (bundle / "trace.json").exists()
+        assert not bundle_target.exists()
+
         evidence = {
             "status": "passed",
             "command": fermata,
@@ -137,6 +152,8 @@ def main() -> int:
                 "target_content_sha256": committed["effect"]["acknowledgement"][
                     "sha256"
                 ],
+                "bundle_state": bundle_output["effect"]["state"],
+                "bundle_target_absent": True,
             },
         }
         print(json.dumps(evidence, indent=2, sort_keys=True))

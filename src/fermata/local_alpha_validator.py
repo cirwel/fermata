@@ -58,6 +58,11 @@ def gates() -> list[Gate]:
             [python, "scripts/run_cli_smoke.py"],
             parses_json=True,
         ),
+        Gate(
+            "run_bundle_contract",
+            [python, "scripts/check_run_bundle_contract.py"],
+            parses_json=True,
+        ),
         Gate("diff_check", ["git", "diff", "--check"]),
     ]
 

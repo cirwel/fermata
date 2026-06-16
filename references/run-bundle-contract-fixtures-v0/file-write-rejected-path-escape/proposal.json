@@ -1,0 +1,26 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.61,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "input": {
+      "content": "This path escape must not be written.\n"
+    },
+    "intent_id": "intent_contract_file_write_rejected_path_escape_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_rejected_path_escape_001",
+    "required_capability": "file.write",
+    "target": "../outside-write-escape.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"../outside-write-escape.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_rejected_path_escape_001",
+  "reason": "pin rejected file.write bundle contract",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

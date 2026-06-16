@@ -1,0 +1,12 @@
+{
+  "approval_required_for": [
+    "file.write"
+  ],
+  "capabilities": [
+    "file.read",
+    "file.write"
+  ],
+  "max_bytes": 4096,
+  "sandbox_root": "sandbox",
+  "scope_id": "local_alpha_bundle_sandbox"
+}
