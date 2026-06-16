@@ -96,6 +96,7 @@ scripts/
   check_local_alpha_release_candidate.py
   check_local_alpha_release_candidate_record.py
   check_local_alpha_tag_approval_packet.py
+  check_local_alpha_tag_publication_preflight.py
   check_run_bundle_contract.py
   check_recovery_evidence.py
   check_recovery_evidence_example.py
@@ -210,6 +211,7 @@ python3 scripts/check_local_alpha_release_artifacts.py
 python3 scripts/check_local_alpha_release_candidate.py --allow-current-branch
 python3 scripts/check_local_alpha_release_candidate_record.py
 python3 scripts/check_local_alpha_tag_approval_packet.py
+python3 scripts/check_local_alpha_tag_publication_preflight.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```

@@ -72,6 +72,10 @@ The current repo proves a smaller but real core:
 - a pre-tag maintainer approval packet in
   `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`,
   checked by `scripts/check_local_alpha_tag_approval_packet.py`;
+- a no-effect tag publication preflight in
+  `scripts/check_local_alpha_tag_publication_preflight.py` that rejects missing
+  approval by default and, after approval is supplied, reruns strict checks
+  without creating or pushing the tag;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -174,6 +178,11 @@ rechecks, maintainer approval reference requirement, expected evidence, and
 roll-forward rule for the `v0.1.0` tag effect. It is intentionally not
 approval and records no tag creation or push.
 
+The tag publication preflight is the executable final hold before the tag
+effect. In normal validation it proves missing approval is rejected without
+effects. After an explicit approval reference is supplied, it reruns the strict
+pre-tag checks and still only returns the exact commands to run next.
+
 ## 4. Readiness Matrix
 
 | Area | Current status | Deployable gate |
@@ -193,6 +202,7 @@ approval and records no tag creation or push.
 | Release candidate | Clean-worktree dry run exists | `check_local_alpha_release_candidate` passes before tagging |
 | Candidate record | Concrete pre-tag evidence record exists | `check_local_alpha_release_candidate_record` stays green |
 | Tag approval packet | Pre-tag maintainer approval packet exists | `check_local_alpha_tag_approval_packet` stays green before tagging |
+| Tag publication preflight | Executable final no-effect hold exists | Missing approval is rejected; approved preflight still creates no tag |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -228,5 +238,6 @@ This dossier does not claim:
 ## 7. Next Safe Step
 
 After explicit maintainer approval is recorded, rerun the strict pre-tag checks
-from clean `main` matching `origin/main`, then create and push the annotated
-`v0.1.0` tag exactly as named in the approval packet.
+from clean `main` matching `origin/main`, run the final publication preflight
+with the approval reference, then create and push the annotated `v0.1.0` tag
+exactly as named in the approval packet.

@@ -49,6 +49,7 @@ EXPECTED_SDIST_FILES = {
     "scripts/check_local_alpha_release_candidate.py",
     "scripts/check_local_alpha_release_candidate_record.py",
     "scripts/check_local_alpha_tag_approval_packet.py",
+    "scripts/check_local_alpha_tag_publication_preflight.py",
     "scripts/check_local_service.py",
     "scripts/check_local_alpha_release_artifacts.py",
     "scripts/check_package_build.py",

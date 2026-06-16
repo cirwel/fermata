@@ -32,6 +32,7 @@ REQUIRED_LAST_MINUTE_COMMANDS = [
     "python3 scripts/check_local_alpha_release_candidate.py",
     "python3 scripts/check_local_alpha_release_candidate_record.py",
     "python3 scripts/check_local_alpha_tag_approval_packet.py",
+    "python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>",
     "python3 scripts/validate_local_alpha.py",
 ]
 REQUIRED_MANUAL_RECHECKS = [

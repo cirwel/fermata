@@ -99,6 +99,11 @@ def gates() -> list[Gate]:
             parses_json=True,
         ),
         Gate(
+            "tag_publication_preflight",
+            [python, "scripts/check_local_alpha_tag_publication_preflight.py"],
+            parses_json=True,
+        ),
+        Gate(
             "package_build",
             [python, "scripts/check_package_build.py"],
             parses_json=True,
