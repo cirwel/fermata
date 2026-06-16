@@ -32,8 +32,8 @@ verifies by reading the record back by ID, version, and SHA-256 evidence.
 
 The third proof is a governed network fetch — the pattern reaching past the
 local disk. An agent proposes `network.fetch` with a URL; the runtime checks the
-URL against a scope allowlist (structural match: scheme + exact host + path
-prefix, never substring), refuses private/loopback targets unless the scope
+URL against a scope allowlist (structural match: scheme + exact host + effective
+port + path prefix, never substring), refuses private/loopback targets unless the scope
 opts in, fetches only `http`/`https` with `GET` under a hard timeout, follows no
 redirects, caps the body at the scope byte budget, persists the response to a
 scoped sandbox file, and verifies by reading those bytes back and comparing

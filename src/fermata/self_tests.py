@@ -1677,6 +1677,23 @@ def run_self_tests() -> dict[str, Any]:
             assert net_miss.rejection_reason == "network_url_not_in_allowlist"
             results["network_allowlist_miss_rejected"] = {"rejected": True}
 
+            # A port-less allowlist entry authorizes only the default port: the
+            # same host on a non-default port (an internal-service SSRF vector)
+            # is refused unless the port is named explicitly.
+            default_port_scope = sample_network_scope(
+                net_root,
+                allow_prefix="http://127.0.0.1/",
+                approval_required=False,
+                allow_private_network=True,
+            )
+            net_port_miss, _ = evaluate_network_fetch(
+                default_port_scope,
+                sample_network_proposal(ok_url, target="responses/port.bin"),
+            )
+            assert net_port_miss.state == EffectState.REJECTED
+            assert net_port_miss.rejection_reason == "network_url_not_in_allowlist"
+            results["network_nondefault_port_rejected"] = {"rejected": True}
+
             # Non-http scheme → rejected before any connection.
             net_scheme, _ = evaluate_network_fetch(
                 net_scope, sample_network_proposal("file:///etc/passwd")

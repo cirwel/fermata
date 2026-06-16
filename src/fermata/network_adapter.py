@@ -23,9 +23,9 @@ Security posture (fail-closed). Read this before changing anything:
 - The persisted write reuses the file adapter's O_NOFOLLOW anchored walk.
 
 Deferred to a future version (documented, not silently missing): resolved-IP
-pinning between check and connect (full DNS-rebinding immunity), port
-allowlisting beyond scheme defaults, per-scope request-rate budgets, and
-content-type contract enforcement.
+pinning between check and connect (full DNS-rebinding immunity), per-scope
+request-rate budgets, and content-type contract enforcement. (Port restriction
+is enforced: a port-less allowlist entry authorizes only the scheme default.)
 """
 
 from __future__ import annotations
@@ -124,18 +124,33 @@ def _parse_fetch_url(url: str) -> tuple[str, str, int | None, str]:
     return parsed.scheme, host.lower(), port, parsed.path or "/"
 
 
+def _effective_port(scheme: str, port: int | None) -> int:
+    """The port a URL targets, filling in the scheme default when unstated."""
+
+    if port is not None:
+        return port
+    return 443 if scheme == "https" else 80
+
+
 def _url_in_allowlist(
     scheme: str, host: str, port: int | None, path: str, network_allow: tuple[str, ...]
 ) -> bool:
-    """Structural allowlist match: exact scheme + host, port-if-named, path prefix."""
+    """Structural allowlist match: exact scheme + host + effective port, path prefix.
 
+    Ports are compared by *effective* value (scheme default filled in), so a
+    port-less allowlist entry (``http://host/``) authorizes only the default
+    port — never an arbitrary internal-service port like ``:6379`` on the same
+    host. A non-default port must be named in the allowlist explicitly.
+    """
+
+    target_port = _effective_port(scheme, port)
     for prefix in network_allow:
         p = urlsplit(prefix)
         if p.scheme != scheme:
             continue
         if (p.hostname or "").lower() != host:
             continue
-        if p.port is not None and p.port != port:
+        if _effective_port(p.scheme, p.port) != target_port:
             continue
         if path.startswith(p.path or "/"):
             return True
