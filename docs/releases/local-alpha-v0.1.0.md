@@ -97,6 +97,7 @@ The required validator currently reports these gate IDs:
 - `golden_checks`
 - `cli_smoke`
 - `run_bundle_contract`
+- `approval_surface`
 - `runtime_api`
 - `local_service`
 - `recovery_evidence`

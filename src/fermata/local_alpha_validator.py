@@ -64,6 +64,11 @@ def gates() -> list[Gate]:
             parses_json=True,
         ),
         Gate(
+            "approval_surface",
+            [python, "scripts/check_approval_surface.py"],
+            parses_json=True,
+        ),
+        Gate(
             "runtime_api",
             [python, "scripts/check_runtime_api.py"],
             parses_json=True,

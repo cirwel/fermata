@@ -18,7 +18,13 @@ from fermata.runtime_api import (
     run as run_runtime,
     scope_from_record,
 )
-from fermata.runtime_ir import ApprovalDecision, Proposal, Scope
+from fermata.runtime_ir import (
+    ApprovalDecision,
+    ApprovalStatus,
+    Proposal,
+    Scope,
+    make_approval_decision,
+)
 from fermata.service_records import ServiceRecordsError, export_service_records
 
 
@@ -118,6 +124,96 @@ def run_bundle(bundle_dir: Path, *, overwrite: bool = False) -> dict[str, Any]:
     }
 
 
+def read_pending_approval(bundle_dir: Path) -> tuple[dict[str, Any], Scope, Proposal]:
+    """Load a bundle that is paused awaiting an approval decision.
+
+    Raises ``CliError`` if the bundle has not been run, is not paused for
+    approval, or carries no intent to approve.
+    """
+
+    effect_path = bundle_dir / "effect.json"
+    if not effect_path.exists():
+        raise CliError(
+            f"{effect_path} not found; run `fermata bundle run` first so there "
+            "is a pending effect to approve"
+        )
+    effect = read_json_object(effect_path)
+    if effect.get("state") != "paused" or effect.get("required_input") != "approval_decision":
+        raise CliError(
+            "bundle is not awaiting an approval decision "
+            f"(state={effect.get('state')!r}, required_input="
+            f"{effect.get('required_input')!r})"
+        )
+
+    scope_path = bundle_dir / "scope.json"
+    proposal_path = bundle_dir / "proposal.json"
+    scope_record = read_json_object(scope_path)
+    scope = scope_from_record(
+        scope_record,
+        sandbox_root=bundle_sandbox_root(scope_record, bundle_dir),
+    )
+    proposal = proposal_from_record(read_json_object(proposal_path))
+    if proposal.intent is None:
+        raise CliError("proposal has no intent to approve")
+    return effect, scope, proposal
+
+
+def render_pending_approval(proposal: Proposal, scope: Scope) -> str:
+    """Render a plain-English summary of the effect awaiting approval."""
+
+    intent = proposal.intent
+    assert intent is not None  # guaranteed by read_pending_approval
+    content = intent.input.get("content") if isinstance(intent.input, dict) else None
+    size = f"{len(content)} bytes" if isinstance(content, str) else "no content"
+    return (
+        f"{proposal.actor} wants to {intent.operation} "
+        f"{intent.adapter}:{intent.target} ({size}) "
+        f"under scope {scope.scope_id!r}, which requires your approval. "
+        f"Capability: {intent.required_capability}."
+    )
+
+
+def approve_bundle(
+    bundle_dir: Path,
+    *,
+    decision: str,
+    approver: str,
+) -> dict[str, Any]:
+    """Record an approval decision for a paused bundle and re-run it.
+
+    ``decision`` is ``"approve"`` or ``"deny"``. The decision is written as a
+    canonical approval record bound to the bundle's scope and intent hash, then
+    the bundle is re-run so ``effect.json``/``trace.json`` reflect the outcome.
+    """
+
+    bundle_dir = bundle_dir.resolve()
+    if not bundle_dir.is_dir():
+        raise CliError(f"{bundle_dir} must be a bundle directory")
+    if decision not in {"approve", "deny"}:
+        raise CliError(f"unknown decision {decision!r}; expected approve or deny")
+
+    _, scope, proposal = read_pending_approval(bundle_dir)
+    status = ApprovalStatus.APPROVED if decision == "approve" else ApprovalStatus.DENIED
+    approval = make_approval_decision(
+        scope,
+        proposal.intent,
+        approver=approver,
+        status=status,
+        reason=f"operator_{decision}",
+    )
+    approval_path = bundle_dir / "approval.json"
+    write_json_object(approval_path, approval.to_record(), overwrite=True)
+    result = run_bundle(bundle_dir, overwrite=True)
+    return {
+        "status": "ok",
+        "decision": decision,
+        "approver": approver,
+        "approval": str(approval_path),
+        "effect": result["effect"],
+        "trace": result["trace"],
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser."""
 
@@ -146,6 +242,30 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_run_parser = bundle_subparsers.add_parser("run")
     bundle_run_parser.add_argument("bundle_dir", type=Path)
     bundle_run_parser.add_argument("--overwrite", action="store_true")
+
+    approve_parser = subparsers.add_parser("approve")
+    approve_parser.add_argument("bundle_dir", type=Path)
+    approve_parser.add_argument(
+        "--approver",
+        default="operator:cli",
+        help="who is recording the decision; stored in the approval record",
+    )
+    approve_parser.add_argument(
+        "--render-only",
+        action="store_true",
+        help="print the pending approval summary and exit without deciding",
+    )
+    decision_group = approve_parser.add_mutually_exclusive_group()
+    decision_group.add_argument(
+        "--yes",
+        action="store_true",
+        help="approve without prompting (required for non-interactive use)",
+    )
+    decision_group.add_argument(
+        "--deny",
+        action="store_true",
+        help="deny without prompting",
+    )
 
     service_parser = subparsers.add_parser("service")
     service_subparsers = service_parser.add_subparsers(
@@ -185,6 +305,29 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "bundle":
             output = run_bundle(args.bundle_dir, overwrite=args.overwrite)
+        elif args.command == "approve":
+            bundle_dir = args.bundle_dir.resolve()
+            effect, scope, proposal = read_pending_approval(bundle_dir)
+            summary = render_pending_approval(proposal, scope)
+            if args.render_only:
+                output = {"status": "ok", "pending": summary, "effect": effect}
+            else:
+                if args.deny:
+                    decision = "deny"
+                elif args.yes:
+                    decision = "approve"
+                elif sys.stdin.isatty():
+                    print(summary, file=sys.stderr)
+                    answer = input("Approve this effect? [y/N] ").strip().lower()
+                    decision = "approve" if answer in {"y", "yes"} else "deny"
+                else:
+                    raise CliError(
+                        "no approval decision provided; pass --yes or --deny for "
+                        "non-interactive use"
+                    )
+                output = approve_bundle(
+                    bundle_dir, decision=decision, approver=args.approver
+                )
         else:
             sandbox_root = (
                 args.sandbox_root
