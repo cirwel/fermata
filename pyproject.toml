@@ -13,6 +13,7 @@ dependencies = []
 dev = ["jsonschema>=4.0"]
 
 [project.scripts]
+fermata = "fermata.cli:main"
 fermata-local-adapter-spike = "fermata.governed_effects:main"
 fermata-parse-tongue = "fermata.tongue_parser:main"
 fermata-render-tongue = "fermata.tongue_renderer:main"

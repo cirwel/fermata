@@ -350,6 +350,22 @@
       "expected_state": "approved"
     }
   ],
+  "cli": [
+    {
+      "name": "cli_interpret_approval_required_pauses",
+      "expected_state": "paused",
+      "expected_required_input": "approval_decision",
+      "trace_events_key": "cli_interpret_approval_required_trace_events",
+      "expected_trace_contains": ["approval.requested"],
+      "expected_trace_excludes": ["adapter.commit.started", "effect.committed"]
+    },
+    {
+      "name": "cli_run_approved_commits",
+      "expected_state": "committed",
+      "trace_events_key": "cli_run_approved_trace_events",
+      "expected_trace_contains": ["adapter.commit.started", "effect.committed"]
+    }
+  ],
   "trace_ledger": [
     {
       "name": "trace_ledger_append_verified",

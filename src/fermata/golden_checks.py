@@ -223,6 +223,33 @@ def check_interpreter(
     return passed
 
 
+def check_cli(
+    golden: dict[str, Any],
+    results: dict[str, Any],
+) -> list[str]:
+    """Run public CLI lowering/evaluation golden cases."""
+
+    passed = []
+    for case in golden.get("cli", []):
+        name = case["name"]
+        actual = results[name]
+        assert actual["state"] == case["expected_state"]
+        if "expected_reason" in case:
+            assert actual.get("rejection_reason") == case["expected_reason"]
+        if "expected_required_input" in case:
+            assert actual.get("required_input") == case["expected_required_input"]
+        if "expected_trace_contains" in case:
+            trace = results[case["trace_events_key"]]
+            for event_type in case["expected_trace_contains"]:
+                assert event_type in trace
+        if "expected_trace_excludes" in case:
+            trace = results[case["trace_events_key"]]
+            for event_type in case["expected_trace_excludes"]:
+                assert event_type not in trace
+        passed.append(name)
+    return passed
+
+
 def check_trace_ledger(
     golden: dict[str, Any],
     results: dict[str, Any],
@@ -312,6 +339,7 @@ def run_golden_checks(
         "file_write_adapter": check_file_write(golden, adapter_results),
         "memory_write_adapter": check_memory_write(golden, adapter_results),
         "interpreter": check_interpreter(golden, adapter_results),
+        "cli": check_cli(golden, adapter_results),
         "trace_ledger": check_trace_ledger(golden, adapter_results),
         "surfaces": check_surfaces(validator, adapter_results),
     }

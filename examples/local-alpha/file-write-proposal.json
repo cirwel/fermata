@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1",
+  "record_type": "proposal",
+  "proposal_id": "prop_local_alpha_file_write_001",
+  "actor": "agent:local-alpha",
+  "speech_act": "intend",
+  "reason": "exercise the local Fermata CLI",
+  "confidence": 0.82,
+  "evidence": [
+    "example:local-alpha"
+  ],
+  "payload": {
+    "utterance": "intend file.write target:\"cli-note.txt\""
+  },
+  "intent": {
+    "intent_id": "intent_local_alpha_file_write_001",
+    "proposal_id": "prop_local_alpha_file_write_001",
+    "adapter": "file",
+    "operation": "write",
+    "target": "cli-note.txt",
+    "input": {
+      "content": "Fermata CLI writes only through governed adapters.\n"
+    },
+    "required_capability": "file.write"
+  }
+}
