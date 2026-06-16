@@ -39,6 +39,13 @@ redirects, caps the body at the scope byte budget, persists the response to a
 scoped sandbox file, and verifies by reading those bytes back and comparing
 SHA-256. Same admit → approve → commit → verify contract, now over the network.
 
+Across all three, commits are **retry-safe**: an intent may carry an
+`idempotency_key`, and the runtime commits the effect at most once per
+(scope, key). A re-submitted proposal — after a crash, timeout, or network blip —
+returns the prior committed result instead of re-running the adapter, and the
+same key with a different intent is rejected as a conflict. An orchestrator can
+retry a governed proposal without fear of double-applying the effect.
+
 ## Current Release State
 
 Fermata has a published local-alpha prerelease:
