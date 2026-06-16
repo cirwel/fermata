@@ -1773,6 +1773,58 @@ def run_self_tests() -> dict[str, Any]:
             server.shutdown()
             net_thread.join(timeout=5)
 
+        # --- Idempotent commits ---
+        def _keyed_file_proposal(content: str, key: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_idem_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="retry-safe governed write",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_idem_001",
+                    proposal_id="prop_idem_001",
+                    adapter="file",
+                    operation="write",
+                    target="idem-note.txt",
+                    input={"content": content},
+                    required_capability="file.write",
+                    idempotency_key=key,
+                ),
+            )
+
+        idem_scope = sample_scope(Path(tmp) / "idem_sandbox", approval_required=False)
+
+        # First commit writes the file.
+        idem_first, _ = evaluate_file_write(idem_scope, _keyed_file_proposal("v1\n", "K1"))
+        assert idem_first.state == EffectState.COMMITTED
+        idem_target = idem_scope.sandbox_root / "idem-note.txt"
+        assert idem_target.read_text(encoding="utf-8") == "v1\n"
+        results["idempotency_first_commits"] = idem_first.to_record()
+
+        # Replaying the same key + intent returns the prior committed result and
+        # does NOT re-run the adapter — note a keyless redo would be rejected
+        # here with target_exists_no_overwrite, so a plain COMMITTED proves the
+        # replay short-circuited before prepare.
+        idem_replay, idem_replay_trace = evaluate_file_write(
+            idem_scope, _keyed_file_proposal("v1\n", "K1")
+        )
+        assert idem_replay.state == EffectState.COMMITTED
+        assert idem_replay.effect_id == idem_first.effect_id
+        replay_events = [event["type"] for event in idem_replay_trace.events]
+        assert "effect.idempotent_replay" in replay_events
+        assert "adapter.commit.started" not in replay_events
+        results["idempotency_replay_returns_prior"] = {"replayed": True}
+
+        # Reusing the key with a different intent is a conflict, not a replay.
+        idem_conflict, _ = evaluate_file_write(
+            idem_scope, _keyed_file_proposal("DIFFERENT\n", "K1")
+        )
+        assert idem_conflict.state == EffectState.REJECTED
+        assert idem_conflict.rejection_reason == "idempotency_key_conflict"
+        results["idempotency_conflict_rejected"] = {"rejected": True}
+
     return results
 
 

@@ -24,6 +24,7 @@ from fermata.runtime_ir import (
     approval_for,
     approval_rejection_reason,
     enum_value,
+    intent_sha256,
     sha256_bytes,
 )
 
@@ -133,6 +134,77 @@ def anchored_atomic_write(
                 os.unlink(temp_name, dir_fd=parent_fd)
             except OSError:
                 pass
+        os.close(parent_fd)
+
+
+def idempotency_store_path(scope: Scope) -> Path:
+    """Scoped local idempotency ledger path (sandbox root resolved, leaf not)."""
+
+    return scope.sandbox_root.resolve() / ".fermata-idempotency" / "keys.jsonl"
+
+
+def idempotency_lookup(scope: Scope, key: str) -> dict[str, Any] | None:
+    """Return the most recent committed record stored under (scope, key), or None.
+
+    Reads the scoped idempotency ledger through an O_NOFOLLOW open so a symlink
+    planted at the ledger leaf is refused rather than followed. A missing ledger
+    means no prior commit under this key.
+    """
+
+    ledger_path = idempotency_store_path(scope)
+    if not is_inside(scope.sandbox_root, ledger_path):
+        raise ValueError(RejectionReason.PATH_OUTSIDE_SCOPE.value)
+    try:
+        read_fd = os.open(ledger_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return None
+    with os.fdopen(read_fd, "r", encoding="utf-8") as ledger_file:
+        text = ledger_file.read()
+    found: dict[str, Any] | None = None
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        if (
+            record.get("idempotency_key") == key
+            and record.get("scope_id") == scope.scope_id
+        ):
+            found = record
+    return found
+
+
+def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
+    """Append one idempotency record to the scoped ledger, symlink-safe.
+
+    Uses the file adapter's O_NOFOLLOW anchored walk so no symlink at any ledger
+    path component can redirect the append.
+    """
+
+    ledger_path = idempotency_store_path(scope)
+    ensure_private_directory(ledger_path.parent, root=ledger_path.parent.resolve())
+
+    from fermata.file_adapter import open_file_parent_fd
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+    parent_fd = open_file_parent_fd(scope, ledger_path)
+    try:
+        fd = os.open(
+            ledger_path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | nofollow,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with os.fdopen(fd, "ab") as ledger_file:
+            os.fchmod(ledger_file.fileno(), 0o600)
+            ledger_file.write(line)
+            ledger_file.flush()
+            os.fsync(ledger_file.fileno())
+        try:
+            os.fsync(parent_fd)
+        except OSError:
+            pass
+    finally:
         os.close(parent_fd)
 
 
@@ -377,6 +449,55 @@ def evaluate_with_adapter(
             RejectionReason.INPUT_MISSING_OR_NOT_OBJECT,
         ), trace
 
+    # Idempotent replay: if this scope already committed an effect under the same
+    # key, return the prior committed result instead of re-running the adapter.
+    # Checked before prepare() so a replay short-circuits even when the adapter
+    # would otherwise reject the redo (e.g. file.write target-exists). Only on
+    # the real commit path — interpret() never commits, so it never replays. A
+    # reused key with a different intent is a conflict, not a replay.
+    if not _stop_at_approval and intent.idempotency_key:
+        try:
+            prior = idempotency_lookup(scope, intent.idempotency_key)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.ADAPTER_COMMIT_FAILED,
+                error_type=exc.__class__.__name__,
+            ), trace
+        if prior is not None:
+            if prior.get("intent_sha256") != intent_sha256(intent):
+                trace.add(
+                    "effect.idempotency_conflict",
+                    idempotency_key=intent.idempotency_key,
+                )
+                return reject(
+                    trace,
+                    scope,
+                    intent.intent_id,
+                    RejectionReason.IDEMPOTENCY_KEY_CONFLICT,
+                    idempotency_key=intent.idempotency_key,
+                ), trace
+            prior_effect = prior.get("effect", {})
+            trace.add(
+                "effect.idempotent_replay",
+                idempotency_key=intent.idempotency_key,
+                effect_id=prior_effect.get("effect_id"),
+                committed_at=prior_effect.get("committed_at"),
+            )
+            return EffectResult(
+                state=EffectState.COMMITTED,
+                trace_id=trace.trace_id,
+                effect_id=prior_effect.get("effect_id")
+                or f"effect_{uuid.uuid4().hex[:8]}",
+                intent_id=intent.intent_id,
+                scope_id=scope.scope_id,
+                acknowledgement=prior_effect.get("acknowledgement"),
+                verification=prior_effect.get("verification"),
+                committed_at=prior_effect.get("committed_at"),
+            ), trace
+
     preparation = adapter.prepare(scope, proposal, intent, trace)
     if isinstance(preparation, EffectResult):
         return preparation, trace
@@ -450,7 +571,7 @@ def evaluate_with_adapter(
         verification=commit_evidence.verification,
         committed_at=commit_evidence.committed_at,
     )
-    return EffectResult(
+    committed = EffectResult(
         state=EffectState.COMMITTED,
         trace_id=trace.trace_id,
         effect_id=f"effect_{uuid.uuid4().hex[:8]}",
@@ -460,4 +581,27 @@ def evaluate_with_adapter(
         verification=commit_evidence.verification,
         approval=approval_record,
         committed_at=commit_evidence.committed_at,
-    ), trace
+    )
+
+    # Record the key so a later retry replays this result instead of committing
+    # again. The effect has already happened; a recording failure must not fail
+    # the commit (it only means a future retry would not dedupe), so it is traced
+    # rather than raised.
+    if intent.idempotency_key:
+        try:
+            idempotency_record(
+                scope,
+                {
+                    "idempotency_key": intent.idempotency_key,
+                    "scope_id": scope.scope_id,
+                    "intent_sha256": intent_sha256(intent),
+                    "effect": committed.to_record(),
+                },
+            )
+        except (OSError, ValueError) as exc:
+            trace.add(
+                "effect.idempotency_record_failed",
+                error_type=exc.__class__.__name__,
+            )
+
+    return committed, trace

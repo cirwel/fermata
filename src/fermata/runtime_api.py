@@ -126,6 +126,11 @@ def intent_from_record(record: JsonObject) -> Intent:
             "required_capability",
             label="intent",
         ),
+        idempotency_key=(
+            record.get("idempotency_key")
+            if isinstance(record.get("idempotency_key"), str)
+            else None
+        ),
     )
 
 

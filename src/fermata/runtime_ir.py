@@ -81,6 +81,7 @@ class RejectionReason(str, Enum):
     NETWORK_REDIRECT_NOT_ALLOWED = "network_redirect_not_allowed"
     NETWORK_RESPONSE_TOO_LARGE = "network_response_too_large"
     NETWORK_REQUEST_FAILED = "network_request_failed"
+    IDEMPOTENCY_KEY_CONFLICT = "idempotency_key_conflict"
 
 
 SpeechAct = Literal["need", "claim", "doubt", "intend", "remember", "boundary"]
@@ -115,6 +116,11 @@ class Intent:
     target: str
     input: dict[str, Any]
     required_capability: str
+    # Optional retry-safety key. When set, the runtime commits the effect at
+    # most once per (scope, key): a later proposal with the same key returns the
+    # prior committed result instead of re-running the adapter. Excluded from
+    # intent_sha256 when None so existing intent hashes are unchanged.
+    idempotency_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -314,9 +320,20 @@ def canonical_json_bytes(value: Any) -> bytes:
 
 
 def intent_sha256(intent: Intent) -> str:
-    """Return the stable hash for an intent record."""
+    """Return the stable hash for an intent record.
 
-    return sha256_bytes(canonical_json_bytes(intent))
+    A ``None`` ``idempotency_key`` is dropped before hashing so intents without
+    a key hash exactly as they did before the field existed — preserving every
+    previously issued approval binding. A set key participates in the hash, so
+    the same operation with and without a key are distinct intents.
+    """
+
+    data = to_jsonable(intent)
+    if isinstance(data, dict) and data.get("idempotency_key") is None:
+        data.pop("idempotency_key", None)
+    return sha256_bytes(
+        json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
 
 
 def parse_iso_timestamp(value: str) -> datetime:
