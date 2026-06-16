@@ -46,8 +46,11 @@ The current repo proves a smaller but real core:
 - authority-policy and agent-proposal surfaces that lower into the same IR;
 - schema, corpus, parser, renderer, adapter, interpreter, trace-ledger, and
   surface checks in `scripts/run_tongue_golden_tests.py`;
+- repeatable installed-command CLI smoke in `scripts/run_cli_smoke.py`;
+- a current local-alpha validation command in
+  `scripts/validate_local_alpha.py`;
 - package metadata with console entry points for the local adapter spike,
-  parser, renderer, and golden checks.
+  local alpha validator, parser, renderer, and golden checks.
 
 That is enough for a runtime seed. It is not yet enough for a deployable tool
 people can depend on.
@@ -124,7 +127,7 @@ check package metadata and console entry points
 | Bundle contract | Missing | Orchestrator can submit a bundle without imports |
 | Runtime API | Internal shape exists | Documented stable import surface |
 | Service mode | Missing | Loopback-only local alpha with append-only records |
-| Packaging | Basic metadata exists | Wheel/sdist build and entry-point check pass |
+| Packaging | Basic metadata and local-alpha validator exist | Wheel/sdist build and entry-point check pass |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
 ## 5. Milestone Slices
@@ -133,8 +136,8 @@ check package metadata and console entry points
    JSON scope/proposal records and print effect/trace JSON.
 2. **Bundle slice**: add a checked run-bundle contract for orchestrators.
 3. **Runtime API slice**: document and test the stable Python import surface.
-4. **Package gate slice**: add a package-build checker and one local-alpha
-   validation command.
+4. **Package gate slice**: add a package-build checker after the current
+   local-alpha validation command.
 5. **Local service slice**: add a loopback-only service prototype after the CLI
    and bundle boundaries are executable.
 6. **Recovery evidence slice**: add incident/reconciliation templates only once
@@ -158,7 +161,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add the local CLI slice: a `fermata` command that reads checked JSON scope and
-proposal records, evaluates them through the existing runtime contract, and
-prints public effect and trace records without committing unless the runtime
-crosses the governed adapter boundary.
+Add the bundle slice: a checked directory contract that lets orchestrators submit
+scope, proposal, and approval records without importing Fermata internals.

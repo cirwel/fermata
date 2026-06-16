@@ -36,3 +36,5 @@ jobs:
           PY
       - name: Run governed-effect golden checks
         run: python scripts/run_tongue_golden_tests.py
+      - name: Run local alpha validator
+        run: python scripts/validate_local_alpha.py

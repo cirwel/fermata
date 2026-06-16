@@ -70,6 +70,7 @@ docs/
   tongue-eval-rubric-v0.md
   ai-native-tongue-toolkit.md
   deployability-dossier-v0.md
+  local-alpha-release-checklist-v0.md
   ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
@@ -79,7 +80,9 @@ scripts/
   governed_effect_file_write_spike.py
   parse_tongue_line.py
   render_tongue_record.py
+  run_cli_smoke.py
   run_tongue_golden_tests.py
+  validate_local_alpha.py
 examples/
   local-alpha/
     file-scope.json
@@ -92,6 +95,7 @@ src/
     file_adapter.py
     governed_effects.py
     interpreter.py
+    local_alpha_validator.py
     memory_adapter.py
     policy_parser.py
     runtime_core.py
@@ -172,6 +176,7 @@ python3 -m pip install -e '.[dev]'
 python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
 fermata-golden-checks
+python3 scripts/validate_local_alpha.py
 ```
 
 Expected final status:
@@ -182,6 +187,8 @@ Expected final status:
 
 The distance from the current runtime seed to a deployable local alpha is tracked
 in [docs/deployability-dossier-v0.md](docs/deployability-dossier-v0.md).
+The current local-alpha gate is documented in
+[docs/local-alpha-release-checklist-v0.md](docs/local-alpha-release-checklist-v0.md).
 
 To see the local adapter evidence directly:
 
