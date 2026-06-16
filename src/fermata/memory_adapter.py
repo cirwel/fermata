@@ -49,16 +49,18 @@ def memory_store_path(scope: Scope, target: str) -> Path:
     if any(part.endswith(".jsonl") for part in raw.parts):
         raise ValueError("memory_target_reserved_suffix")
 
-    store_root = scope.sandbox_root / ".fermata-memory"
+    # Resolve only the store root; the ledger subdirectories and ``.jsonl``
+    # leaf are left unresolved so a symlink planted at any of those components
+    # is not silently followed during path computation. The anchored
+    # O_NOFOLLOW walk in prepare/commit is what rejects such symlinks.
+    store_root = (scope.sandbox_root / ".fermata-memory").resolve()
     ledger_path = store_root / raw.parent / f"{raw.name}.jsonl"
-    resolved_store_root = store_root.resolve()
-    resolved = ledger_path.resolve()
-    if not is_inside(scope.sandbox_root, resolved) or not is_inside(
-        resolved_store_root,
-        resolved,
+    if not is_inside(scope.sandbox_root, ledger_path) or not is_inside(
+        store_root,
+        ledger_path,
     ):
         raise ValueError("memory_target_outside_scope")
-    return resolved
+    return ledger_path
 
 
 MEMORY_LIFESPANS = frozenset({"session", "project", "durable"})
@@ -185,10 +187,27 @@ class MemoryWriteAdapter:
             )
 
         existing_records: list[dict[str, Any]] = []
-        if ledger_path.exists():
+        # Read any existing ledger through an O_NOFOLLOW open so a symlink
+        # planted at the leaf is refused (ELOOP) rather than followed to an
+        # arbitrary file. No directory is created here; prepare stays a dry run.
+        try:
+            read_fd = os.open(ledger_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        except FileNotFoundError:
+            read_fd = None
+        except OSError as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.MEMORY_STORE_UNREADABLE,
+                error_type=exc.__class__.__name__,
+            )
+        if read_fd is not None:
             try:
+                with os.fdopen(read_fd, "r", encoding="utf-8") as ledger_file:
+                    existing_text = ledger_file.read()
                 record_number = 0
-                for line in ledger_path.read_text(encoding="utf-8").splitlines():
+                for line in existing_text.splitlines():
                     if not line.strip():
                         continue
                     record_number += 1
@@ -305,75 +324,97 @@ class MemoryWriteAdapter:
             (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
             for record in candidate_records
         )
-        temp_path = ledger_path.with_name(f".{ledger_path.name}.{uuid.uuid4().hex}.tmp")
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        ledger_name = ledger_path.name
+        temp_name = f".{ledger_name}.{uuid.uuid4().hex}.tmp"
         replaced = False
+        memory_store_root = (scope.sandbox_root / ".fermata-memory").resolve()
+        ensure_private_directory(ledger_path.parent, root=memory_store_root)
+        # Reach the ledger directory by an O_NOFOLLOW walk from the sandbox and
+        # anchor every open to that directory fd, matching the file adapter and
+        # trace ledger: no symlink at any path component can redirect the
+        # temp write, read-back, or rename.
+        from fermata.file_adapter import open_file_parent_fd
+
+        parent_fd = open_file_parent_fd(scope, ledger_path)
         try:
-            memory_store_root = (scope.sandbox_root / ".fermata-memory").resolve()
-            ensure_private_directory(ledger_path.parent, root=memory_store_root)
-            fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "wb") as temp_ledger:
-                os.fchmod(temp_ledger.fileno(), 0o600)
-                temp_ledger.write(candidate_bytes)
-                temp_ledger.flush()
-                os.fsync(temp_ledger.fileno())
-
-            readback_records: list[dict[str, Any]] = []
-            record_number = 0
-            for line in temp_path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                record_number += 1
-                record = validate_memory_record(
-                    json.loads(line),
-                    expected_target=intent.target,
-                    expected_version=record_number,
-                )
-                readback_records.append(record)
-
-            matched = next(
-                (
-                    record
-                    for record in readback_records
-                    if record.get("record_id") == record_id
-                    and record.get("version") == version
-                ),
-                None,
-            )
-            if matched != memory_record:
-                raise ValueError("memory_read_back_mismatch")
-
-            os.replace(temp_path, ledger_path)
-            replaced = True
             try:
-                dir_fd = os.open(ledger_path.parent, os.O_RDONLY)
+                fd = os.open(
+                    temp_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                with os.fdopen(fd, "wb") as temp_ledger:
+                    os.fchmod(temp_ledger.fileno(), 0o600)
+                    temp_ledger.write(candidate_bytes)
+                    temp_ledger.flush()
+                    os.fsync(temp_ledger.fileno())
+
+                read_fd = os.open(temp_name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
+                with os.fdopen(read_fd, "rb") as temp_ledger:
+                    readback_text = temp_ledger.read().decode("utf-8")
+
+                readback_records: list[dict[str, Any]] = []
+                record_number = 0
+                for line in readback_text.splitlines():
+                    if not line.strip():
+                        continue
+                    record_number += 1
+                    record = validate_memory_record(
+                        json.loads(line),
+                        expected_target=intent.target,
+                        expected_version=record_number,
+                    )
+                    readback_records.append(record)
+
+                matched = next(
+                    (
+                        record
+                        for record in readback_records
+                        if record.get("record_id") == record_id
+                        and record.get("version") == version
+                    ),
+                    None,
+                )
+                if matched != memory_record:
+                    raise ValueError("memory_read_back_mismatch")
+
+                os.replace(
+                    temp_name,
+                    ledger_name,
+                    src_dir_fd=parent_fd,
+                    dst_dir_fd=parent_fd,
+                )
+                replaced = True
                 try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
-            except OSError as exc:
+                    os.fsync(parent_fd)
+                except OSError as exc:
+                    trace.add(
+                        "adapter.directory_fsync.failed",
+                        error_type=exc.__class__.__name__,
+                        target=intent.target,
+                    )
+            except (OSError, json.JSONDecodeError, ValueError) as exc:
+                if not replaced:
+                    try:
+                        os.unlink(temp_name, dir_fd=parent_fd)
+                    except OSError:
+                        pass
                 trace.add(
-                    "adapter.directory_fsync.failed",
+                    "adapter.commit.failed",
                     error_type=exc.__class__.__name__,
                     target=intent.target,
                 )
-        except (OSError, json.JSONDecodeError, ValueError) as exc:
-            if not replaced:
-                try:
-                    temp_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            trace.add(
-                "adapter.commit.failed",
-                error_type=exc.__class__.__name__,
-                target=intent.target,
-            )
-            return reject(
-                trace,
-                scope,
-                intent.intent_id,
-                RejectionReason.ADAPTER_COMMIT_FAILED,
-                error_type=exc.__class__.__name__,
-            )
+                return reject(
+                    trace,
+                    scope,
+                    intent.intent_id,
+                    RejectionReason.ADAPTER_COMMIT_FAILED,
+                    error_type=exc.__class__.__name__,
+                )
+        finally:
+            os.close(parent_fd)
 
         ack = {
             "adapter": "memory",
