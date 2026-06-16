@@ -20,6 +20,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
 - Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
 - Tag approval packet: `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`
+- Tag publication preflight: `python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>`
 - Release commit: `<fill-with-merged-main-commit-before-tagging>`
 
 ## Required Checks
@@ -31,6 +32,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
       `main` checkout matching `origin/main`.
 - [ ] Run `python3 scripts/check_local_alpha_release_candidate_record.py`.
 - [ ] Run `python3 scripts/check_local_alpha_tag_approval_packet.py`.
+- [ ] Run `python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>`.
 - [ ] Run `python3 scripts/validate_local_alpha.py` and attach the top-level
       `"status": "passed"` result.
 - [ ] Confirm GitHub Actions `ci / golden` passed on the exact release commit.
@@ -66,6 +68,7 @@ git push origin v0.1.0
 - release-candidate dry-run summary;
 - release-candidate record summary;
 - tag approval packet summary;
+- tag publication preflight summary;
 - maintainer approval reference.
 
 ## Roll-Forward Rule

@@ -26,6 +26,10 @@ RELEASE_CANDIDATE_RECORD_COMMAND = (
     "python3 scripts/check_local_alpha_release_candidate_record.py"
 )
 TAG_APPROVAL_PACKET_COMMAND = "python3 scripts/check_local_alpha_tag_approval_packet.py"
+TAG_PUBLICATION_PREFLIGHT_COMMAND = (
+    "python3 scripts/check_local_alpha_tag_publication_preflight.py "
+    "--approval-reference <approval-reference>"
+)
 
 
 def repo_root() -> Path:
@@ -94,6 +98,7 @@ def check_release_notes(notes: str, gate_names: list[str]) -> dict[str, Any]:
         f"Release-candidate record: `{RELEASE_CANDIDATE_RECORD}`",
         f"Tag approval packet: `{TAG_APPROVAL_PACKET}`",
         f"Tag approval packet check: `{TAG_APPROVAL_PACKET_COMMAND}`",
+        f"Tag publication preflight: `{TAG_PUBLICATION_PREFLIGHT_COMMAND}`",
         "proposal, intent, approval, and committed-effect boundaries",
         "hosted production readiness",
         "authenticated multi-user operation",
@@ -124,6 +129,7 @@ def check_tag_checklist(checklist: str) -> dict[str, Any]:
         RELEASE_CANDIDATE_COMMAND,
         RELEASE_CANDIDATE_RECORD_COMMAND,
         TAG_APPROVAL_PACKET_COMMAND,
+        TAG_PUBLICATION_PREFLIGHT_COMMAND,
         str(RELEASE_CANDIDATE_RECORD),
         str(TAG_APPROVAL_PACKET),
         "Release commit: `<fill-with-merged-main-commit-before-tagging>`",

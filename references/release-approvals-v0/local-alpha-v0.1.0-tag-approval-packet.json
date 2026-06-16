@@ -64,6 +64,10 @@
       "expect": "top-level status passed"
     },
     {
+      "command": "python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>",
+      "expect": "top-level status passed and no tag created or pushed"
+    },
+    {
       "command": "python3 scripts/validate_local_alpha.py",
       "expect": "top-level status passed"
     }
@@ -82,7 +86,8 @@
     "GitHub Actions `ci / golden` URL for the release commit",
     "python3 scripts/check_local_alpha_release_candidate.py output summary",
     "python3 scripts/check_local_alpha_release_candidate_record.py output summary",
-    "python3 scripts/check_local_alpha_tag_approval_packet.py output summary"
+    "python3 scripts/check_local_alpha_tag_approval_packet.py output summary",
+    "python3 scripts/check_local_alpha_tag_publication_preflight.py output summary"
   ],
   "rollback_roll_forward_rule": {
     "local_tag_created_not_pushed": "Delete the local tag with `git tag -d v0.1.0`, fix forward on a new commit, and rerun every pre-tag recheck.",
