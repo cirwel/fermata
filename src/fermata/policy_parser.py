@@ -100,6 +100,13 @@ def parse_policy_block(text: str) -> dict[str, Any]:
         if not line.strip():
             continue
 
+        if closed:
+            raise PolicyParseError(
+                f"line {lineno}: unexpected content after the scope block was "
+                "closed; a policy block must contain exactly one "
+                "'scope NAME { ... }' block"
+            )
+
         if not in_scope:
             m = _SCOPE_HEADER_RE.match(line)
             if not m:
@@ -224,7 +231,7 @@ def parse_policy_block(text: str) -> dict[str, Any]:
 
 
 def parse_agent_proposal_json(json_text: str) -> dict[str, Any]:
-    """Load an agent-emitted JSON proposal into a canonical Proposal record.
+    """Load an agent-emitted JSON proposal into a raw record dict.
 
     Agents emit JSON that is meant to validate as a ``Proposal`` record
     against ``references/governed-effect-ir-v0.schema.json``. This helper
@@ -232,14 +239,16 @@ def parse_agent_proposal_json(json_text: str) -> dict[str, Any]:
     treat the agent surface symmetrically with the authority surface
     (``parse_policy_block``).
 
-    The helper deliberately does *not* attempt to interpret the proposal,
-    create an Intent, or produce any EffectRecord. Only the runtime
-    evaluator can produce an effect record; an agent cannot self-declare
-    a committed effect by including extra fields in its JSON, because the
-    canonical schema's ``Proposal`` shape uses ``additionalProperties:
-    false`` and rejects unknown fields, and a ``CommittedEffect`` requires
-    adapter acknowledgement and verification that only the runtime can
-    supply.
+    This helper does **not** validate the record against the canonical
+    schema, and it does **not** enforce ``additionalProperties: false``;
+    it returns whatever JSON object the agent supplied. It is therefore
+    *not* a trust boundary. Schema validation happens in the golden-check
+    suite (``golden_checks.validate_record``); the runtime trust boundary
+    is ``runtime_api.proposal_from_record``, which lowers the dict into a
+    typed ``Proposal`` by reading only known fields, so an agent cannot
+    self-declare a committed effect by attaching extra fields — a
+    ``CommittedEffect`` requires adapter acknowledgement and verification
+    that only the runtime evaluator can supply.
 
     Raises ``ValueError`` on JSON decode error.
     """

@@ -1421,6 +1421,130 @@ def run_self_tests() -> dict[str, Any]:
                 "the authority surface declares requirements, not granted approvals"
             )
 
+        # --- Governance-core hardening regressions ---
+        from fermata.runtime_api import RuntimeApiError, scope_from_record
+
+        harden_root = Path(tmp) / "harden_sandbox"
+        harden_root.mkdir(parents=True, exist_ok=True)
+
+        # Fix #1: an approval condition enrolls ONLY the capability it names
+        # verbatim. A condition for file.read must not leave file.write
+        # un-gated, and the matching must be structural (no substring bleed).
+        exact_scope_record = {
+            "schema_version": "0.1",
+            "record_type": "scope",
+            "scope_id": "harden_exact_enrollment",
+            "capabilities": ["file.read", "file.write"],
+            "approvals": [{"authority": "performer", "condition": 'effect.kind == "file.read"'}],
+        }
+        exact_scope = scope_from_record(exact_scope_record, sandbox_root=harden_root)
+        assert "file.read" in exact_scope.approval_required_for
+        assert "file.write" not in exact_scope.approval_required_for, (
+            "approval condition for file.read must not enroll file.write"
+        )
+        results["approval_condition_exact_enrollment"] = {
+            "approval_required_for": sorted(exact_scope.approval_required_for),
+        }
+
+        # Fix #1: a condition that names no declared capability must be
+        # rejected, not silently fall back to requiring approval for all.
+        try:
+            scope_from_record(
+                {
+                    "schema_version": "0.1",
+                    "record_type": "scope",
+                    "scope_id": "harden_unrecognized_condition",
+                    "capabilities": ["file.write"],
+                    "approvals": [{"authority": "performer", "condition": "always"}],
+                },
+                sandbox_root=harden_root,
+            )
+        except RuntimeApiError as exc:
+            results["approval_condition_unrecognized_rejected"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "an unrecognized approval condition must be rejected, not "
+                "silently enroll every capability"
+            )
+
+        # Fix #1: a condition referencing an undeclared capability is rejected.
+        try:
+            scope_from_record(
+                {
+                    "schema_version": "0.1",
+                    "record_type": "scope",
+                    "scope_id": "harden_undeclared_capability",
+                    "capabilities": ["file.write"],
+                    "approvals": [
+                        {"authority": "performer", "condition": 'effect.kind == "file.read"'}
+                    ],
+                },
+                sandbox_root=harden_root,
+            )
+        except RuntimeApiError as exc:
+            results["approval_condition_undeclared_rejected"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "an approval condition for an undeclared capability must be rejected"
+            )
+
+        # Fix #2: the audit ledger must refuse a symlinked leaf rather than
+        # follow it. Plant a symlink where traces.jsonl would be written,
+        # pointing at a sibling file inside the sandbox, and confirm the append
+        # is rejected and the sibling is left untouched.
+        ledger_scope = sample_scope(
+            Path(tmp) / "ledger_symlink_sandbox", approval_required=False
+        )
+        ledger_target = trace_ledger_path(ledger_scope)
+        ledger_target.parent.mkdir(parents=True, exist_ok=True)
+        decoy = ledger_scope.sandbox_root / ".fermata-traces" / "decoy.txt"
+        decoy.write_text("untouched\n", encoding="utf-8")
+        os.symlink(decoy, ledger_target)
+        try:
+            append_trace_ledger(ledger_scope, Trace(trace_id="trace_symlink_guard"))
+        except (OSError, ValueError) as exc:
+            results["ledger_rejects_symlinked_leaf"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "append_trace_ledger must refuse a symlinked ledger leaf"
+            )
+        assert decoy.read_text(encoding="utf-8") == "untouched\n", (
+            "ledger write followed a symlink and corrupted a sibling file"
+        )
+
+        # Fix #6: a policy block with content after the scope closes (e.g. a
+        # second scope block) must be rejected, not silently merged.
+        try:
+            parse_policy_block(
+                "scope harden_a {\n"
+                '  resource file "./a"\n'
+                '  capability file.write on "./a"\n'
+                "}\n"
+                "scope harden_b {\n"
+                '  resource file "./b"\n'
+                '  capability file.read on "./b"\n'
+                "}\n"
+            )
+        except PolicyParseError as exc:
+            results["policy_rejects_duplicate_scope"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "policy parser must reject a second scope block rather than "
+                "silently merge capabilities under the wrong scope_id"
+            )
+
     return results
 
 

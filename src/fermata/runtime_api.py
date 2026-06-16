@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,15 @@ from fermata.runtime_ir import (
 
 class RuntimeApiError(ValueError):
     """Raised when public runtime API input records are malformed."""
+
+
+# The only recognized approval-condition grammar is an explicit effect-kind
+# equality, e.g. ``effect.kind == "file.write"``. Matching the capability name
+# structurally (rather than by substring) keeps approval enrollment exact: a
+# condition can only enroll a capability it names verbatim, and a condition
+# that names no declared capability is rejected rather than silently enrolling
+# every capability in scope.
+_APPROVAL_CONDITION_RE = re.compile(r'effect\.kind\s*==\s*"([^"]+)"')
 
 
 JsonObject = Mapping[str, Any]
@@ -198,10 +208,21 @@ def scope_from_record(
                 raise RuntimeApiError(
                     f"scope.approvals[{index}].condition must be a string"
                 )
-            matched = {
-                capability for capability in capabilities if capability in condition
-            }
-            approval_required_for.update(matched or capabilities)
+            named = _APPROVAL_CONDITION_RE.findall(condition)
+            if not named:
+                raise RuntimeApiError(
+                    f"scope.approvals[{index}].condition is not a recognized "
+                    'approval condition; expected effect.kind == "<capability>", '
+                    f"got: {condition!r}"
+                )
+            for capability in named:
+                if capability not in capabilities:
+                    raise RuntimeApiError(
+                        f"scope.approvals[{index}].condition requires approval "
+                        f"for capability {capability!r}, which is not declared "
+                        "in scope.capabilities"
+                    )
+            approval_required_for.update(named)
 
     return Scope(
         scope_id=require_string(record, "scope_id", label="scope"),

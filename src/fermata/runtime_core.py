@@ -128,9 +128,15 @@ def approved_result(
 
 
 def trace_ledger_path(scope: Scope) -> Path:
-    """Return the scoped local trace ledger path."""
+    """Return the scoped local trace ledger path.
 
-    return (scope.sandbox_root / ".fermata-traces" / "traces.jsonl").resolve()
+    Only the sandbox root is resolved; the ``.fermata-traces`` directory and
+    ``traces.jsonl`` leaf are left unresolved so a symlink planted at either
+    component is not silently followed during path computation. The anchored
+    O_NOFOLLOW walk in ``append_trace_ledger`` is what rejects such symlinks.
+    """
+
+    return scope.sandbox_root.resolve() / ".fermata-traces" / "traces.jsonl"
 
 
 def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
@@ -153,24 +159,44 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
 
     record_hash = sha256_bytes(record_bytes)
     ensure_private_directory(ledger_path.parent, root=ledger_root)
-    fd = os.open(ledger_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    with os.fdopen(fd, "ab") as ledger_file:
-        os.fchmod(ledger_file.fileno(), 0o600)
-        ledger_file.write(record_bytes)
-        ledger_file.flush()
-        os.fsync(ledger_file.fileno())
 
+    # The audit ledger is the integrity record of governance decisions, so it
+    # is held to the same symlink-safety bar as governed content. Walk to the
+    # ledger directory with O_NOFOLLOW at every component (reusing the file
+    # adapter's anchored walk) and open the ledger file relative to that
+    # directory fd with O_NOFOLLOW, so neither the write nor the read-back can
+    # be redirected through a symlink planted at the ledger path.
+    from fermata.file_adapter import open_file_parent_fd
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    ledger_name = ledger_path.name
+    parent_fd = open_file_parent_fd(scope, ledger_path)
     try:
-        dir_fd = os.open(ledger_path.parent, os.O_RDONLY)
+        fd = os.open(
+            ledger_name,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | nofollow,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with os.fdopen(fd, "ab") as ledger_file:
+            os.fchmod(ledger_file.fileno(), 0o600)
+            ledger_file.write(record_bytes)
+            ledger_file.flush()
+            os.fsync(ledger_file.fileno())
+
         try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
-    except OSError:
-        pass
+            os.fsync(parent_fd)
+        except OSError:
+            pass
+
+        read_fd = os.open(ledger_name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
+        with os.fdopen(read_fd, "rb") as ledger_read:
+            ledger_text = ledger_read.read().decode("utf-8")
+    finally:
+        os.close(parent_fd)
 
     matched_record: dict[str, Any] | None = None
-    for line in ledger_path.read_text(encoding="utf-8").splitlines():
+    for line in ledger_text.splitlines():
         if not line.strip():
             continue
         parsed = json.loads(line)
