@@ -72,6 +72,7 @@ docs/
   deployability-dossier-v0.md
   local-alpha-release-checklist-v0.md
   run-bundle-contract-v0.md
+  runtime-api-v0.md
   ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
@@ -80,6 +81,7 @@ references/
   tongue-golden-tests-v0.json
 scripts/
   check_run_bundle_contract.py
+  check_runtime_api.py
   governed_effect_file_write_spike.py
   parse_tongue_line.py
   render_tongue_record.py
@@ -180,6 +182,7 @@ python3 -m pip install -e '.[dev]'
 python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_schema.json
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
 fermata-golden-checks
+python3 scripts/check_runtime_api.py
 python3 scripts/validate_local_alpha.py
 ```
 
@@ -233,6 +236,23 @@ cp -R examples/local-alpha/run-bundle "$tmp/run-bundle"
 fermata bundle run "$tmp/run-bundle"
 python3 scripts/check_run_bundle_contract.py
 ```
+
+To call the local runtime from Python without shelling out:
+
+```python
+from fermata import interpret, run
+
+paused = interpret(scope_record, proposal_record, sandbox_root="/tmp/fermata-api")
+committed = run(
+    scope_record,
+    proposal_record,
+    approval=approval_record,
+    sandbox_root="/tmp/fermata-api",
+)
+```
+
+The API contract is documented in
+[docs/runtime-api-v0.md](docs/runtime-api-v0.md).
 
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept
 for continuity with the first boring adapter.

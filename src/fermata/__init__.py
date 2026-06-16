@@ -15,6 +15,7 @@ from fermata.governed_effects import (
     make_approval_decision,
     memory_store_path,
 )
+from fermata.runtime_api import RuntimeApiError, RuntimeOutput, interpret, run
 from fermata.tongue_parser import parse_line
 from fermata.tongue_renderer import render_record
 
@@ -30,13 +31,17 @@ __all__ = [
     "EffectState",
     "Intent",
     "Proposal",
+    "RuntimeApiError",
+    "RuntimeOutput",
     "Scope",
     "Trace",
     "__version__",
     "evaluate_file_write",
     "evaluate_memory_write",
+    "interpret",
     "make_approval_decision",
     "memory_store_path",
     "parse_line",
     "render_record",
+    "run",
 ]

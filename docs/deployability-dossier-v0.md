@@ -1,7 +1,7 @@
 # Deployability Dossier v0
 
 **Created:** June 15, 2026
-**Last Updated:** June 15, 2026
+**Last Updated:** June 16, 2026
 **Status:** Draft
 
 ---
@@ -49,6 +49,8 @@ The current repo proves a smaller but real core:
 - repeatable installed-command CLI smoke in `scripts/run_cli_smoke.py`;
 - checked local run-bundle contract in `docs/run-bundle-contract-v0.md` and
   `scripts/check_run_bundle_contract.py`;
+- documented local runtime API in `docs/runtime-api-v0.md` with executable
+  coverage in `scripts/check_runtime_api.py`;
 - a current local-alpha validation command in
   `scripts/validate_local_alpha.py`;
 - package metadata with console entry points for the local adapter spike,
@@ -90,14 +92,17 @@ for remote or hosted integrations.
 
 ### Runtime API
 
-The runtime needs a documented import surface for host applications:
+The local alpha runtime API now exposes a documented import surface for host
+applications:
 
 ```text
 interpret(scope, proposal) -> approved | paused | rejected
 run(scope, proposal, approval?) -> committed | paused | rejected
 ```
 
-The API must return public effect and trace records, not hidden reasoning.
+The API returns public effect and trace records, not hidden reasoning. It remains
+local-alpha only: adapter isolation, hosted persistence, authentication, and
+remote safety are still outside the current claim.
 
 ### Service Boundary
 
@@ -126,9 +131,9 @@ check package metadata and console entry points
 | Public tongue | Seed parser/renderer exists | Golden corpus passes in CI |
 | File adapter | Local proof exists | Denial and commit traces stay covered |
 | Memory adapter | Local proof exists | Denial and commit traces stay covered |
-| CLI workflow | Fragmented commands | One coherent `fermata` command |
+| CLI workflow | Coherent local `fermata` command exists | `run_cli_smoke` stays green |
 | Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
-| Runtime API | Internal shape exists | Documented stable import surface |
+| Runtime API | Local alpha import surface exists | `check_runtime_api` stays green |
 | Service mode | Missing | Loopback-only local alpha with append-only records |
 | Packaging | Basic metadata and local-alpha validator exist | Wheel/sdist build and entry-point check pass |
 | Hosted production | Out of scope | Separate threat model and readiness review |
@@ -164,5 +169,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add the runtime API slice: document and test the stable Python import surface for
-hosts that should not shell out to the CLI.
+Add the package gate slice: check wheel/sdist build and installed console entry
+points after the current local-alpha validation command.
