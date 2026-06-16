@@ -71,6 +71,8 @@ class RejectionReason(str, Enum):
     APPROVAL_SCOPE_MISMATCH = "approval_scope_mismatch"
     APPROVAL_INTENT_MISMATCH = "approval_intent_mismatch"
     APPROVAL_INTENT_HASH_MISMATCH = "approval_intent_hash_mismatch"
+    APPROVAL_NOT_DECIDED = "approval_not_decided"
+    APPROVAL_UNBOUND = "approval_unbound"
 
 
 SpeechAct = Literal["need", "claim", "doubt", "intend", "remember", "boundary"]
@@ -411,6 +413,24 @@ def approval_rejection_reason(
         return RejectionReason.APPROVAL_DENIED
     if approval.status == ApprovalStatus.EXPIRED:
         return RejectionReason.APPROVAL_EXPIRED
+    # A not-yet-decided approval must never authorize a commit. The runtime
+    # pauses on REQUESTED upstream; this guards any direct caller of the
+    # validator (e.g. a future adapter) from treating "requested" as "granted".
+    if approval.status == ApprovalStatus.REQUESTED:
+        return RejectionReason.APPROVAL_NOT_DECIDED
+    # An approval that authorizes a commit must be bound to a specific intent
+    # (by intent_id, intent_sha256, or both — each is checked for a match
+    # above). A bare "approved" record bound to neither would authorize any
+    # intent, even across scopes (replay/forgery). Scope_id alone is not enough:
+    # it would still authorize any intent within that scope. Every legitimate
+    # approval (make_approval_decision / approval_for) carries an intent
+    # binding, so this rejects only unbound forgeries.
+    if (
+        approval.status == ApprovalStatus.APPROVED
+        and approval.intent_id is None
+        and approval.intent_sha256 is None
+    ):
+        return RejectionReason.APPROVAL_UNBOUND
     if approval.expires_at is not None:
         try:
             expires_at = parse_iso_timestamp(approval.expires_at)
