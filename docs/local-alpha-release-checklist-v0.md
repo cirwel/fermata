@@ -58,6 +58,8 @@ The validator currently covers:
   rejected, and committed outcomes;
 - package-level runtime API checks for `interpret` and `run`, including paused,
   rejected, and committed outcomes without shelling out;
+- loopback local service checks for health, interpret, run, service-root
+  confinement, non-loopback bind rejection, and append-only records;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -71,6 +73,7 @@ Before presenting a local alpha:
 - no generated CLI smoke outputs are staged;
 - no secrets, credentials, tokens, passwords, or connection strings are present;
 - examples remain local sandbox examples;
+- service runs only on loopback hosts and remains labeled non-production;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
@@ -93,6 +96,8 @@ also include the passing CI run for the release commit.
 Passing local alpha validation does not imply:
 
 - hosted or multi-user service is implemented;
+- approval queues, trace lookup/export, or service authentication are
+  implemented;
 - remote adapters are safe;
 - OS-level adapter process isolation is implemented;
 - multi-user approval queues exist;

@@ -72,6 +72,7 @@ docs/
   ai-native-tongue-toolkit.md
   deployability-dossier-v0.md
   local-alpha-release-checklist-v0.md
+  local-service-v0.md
   run-bundle-contract-v0.md
   runtime-api-v0.md
   ugly-trace-v0.md
@@ -82,6 +83,7 @@ references/
   tongue-golden-tests-v0.json
 scripts/
   check_package_build.py
+  check_local_service.py
   check_run_bundle_contract.py
   check_runtime_api.py
   governed_effect_file_write_spike.py
@@ -109,6 +111,7 @@ src/
     runtime_core.py
     runtime_ir.py
     self_tests.py
+    service.py
 ```
 
 ## Runtime state model
@@ -185,6 +188,7 @@ python3 -m json.tool references/governed-effect-ir-v0.schema.json >/tmp/fermata_
 python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden.json
 fermata-golden-checks
 python3 scripts/check_runtime_api.py
+python3 scripts/check_local_service.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
@@ -256,6 +260,29 @@ committed = run(
 
 The API contract is documented in
 [docs/runtime-api-v0.md](docs/runtime-api-v0.md).
+
+## Try the loopback local service
+
+```bash
+fermata service run \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --service-root /tmp/fermata-service
+```
+
+The service exposes `GET /health`, `POST /v0/interpret`, and `POST /v0/run`.
+It binds only to loopback hosts, confines request sandbox roots under
+`--service-root`, and appends request/response/trace/error records under
+`--service-root/records/`.
+
+Run the subprocess smoke check with:
+
+```bash
+python3 scripts/check_local_service.py
+```
+
+The service contract is documented in
+[docs/local-service-v0.md](docs/local-service-v0.md).
 
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept
 for continuity with the first boring adapter.
