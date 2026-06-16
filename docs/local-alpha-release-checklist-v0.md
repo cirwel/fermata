@@ -64,6 +64,8 @@ The validator currently covers:
 - recovery evidence template checks for service incident and reconciliation
   reports, including stream names, wrapper record types, and sample
   classifications;
+- recovery evidence example checks that validate a checked packet and generate
+  a fresh packet from an actual loopback local service run;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.

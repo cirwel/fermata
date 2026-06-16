@@ -28,6 +28,8 @@ The templates live in:
 references/recovery-evidence-templates-v0/
   service-incident-report-template.json
   service-reconciliation-report-template.json
+references/recovery-evidence-examples-v0/
+  local-service-run-packet-v0.json
 ```
 
 ## Recovery Packet
@@ -103,10 +105,12 @@ the same service record wrapper helpers used by the local service. It is also
 part of:
 
 ```bash
+python3 scripts/check_recovery_evidence_example.py
 python3 scripts/validate_local_alpha.py
 ```
 
 Passing this check means the recovery evidence templates are internally
-consistent with local service record streams. It does not mean Fermata has
+consistent with local service record streams, and that one filled packet can be
+generated from an actual loopback service run. It does not mean Fermata has
 automatic recovery, hosted persistence, hosted trace lookup APIs, or production
 incident response.

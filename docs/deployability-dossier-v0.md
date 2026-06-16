@@ -58,6 +58,8 @@ The current repo proves a smaller but real core:
 - recovery evidence templates for local service incidents and reconciliation in
   `docs/recovery-evidence-v0.md`, checked by
   `scripts/check_recovery_evidence.py`;
+- a filled recovery evidence packet example generated from local service record
+  export and checked by `scripts/check_recovery_evidence_example.py`;
 - checked package build gate for wheel, sdist, source manifest contents, and
   installed console entry points in `scripts/check_package_build.py`;
 - a current local-alpha validation command in
@@ -155,6 +157,7 @@ the wheel.
 | Service mode | Loopback local alpha service exists | `check_local_service` stays green |
 | Record export | Read-only local service record export exists | `check_local_service` stays green |
 | Recovery evidence | Incident and reconciliation templates exist | `check_recovery_evidence` stays green |
+| Recovery example | Filled local service packet example exists | `check_recovery_evidence_example` stays green |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
 
@@ -189,5 +192,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add a filled recovery-evidence example generated from an actual local service
-run, using `fermata service records` output as the source evidence.
+Add release artifact preparation: versioned local-alpha notes and a tag checklist
+that names the exact validator and CI evidence required before publishing.

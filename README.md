@@ -80,6 +80,7 @@ docs/
 references/
   governed-effect-ir-v0.schema.json
   ai-native-tongue-seed-corpus-v0.jsonl
+  recovery-evidence-examples-v0/
   recovery-evidence-templates-v0/
   run-bundle-contract-fixtures-v0/
   tongue-golden-tests-v0.json
@@ -88,6 +89,7 @@ scripts/
   check_local_service.py
   check_run_bundle_contract.py
   check_recovery_evidence.py
+  check_recovery_evidence_example.py
   check_runtime_api.py
   governed_effect_file_write_spike.py
   parse_tongue_line.py
@@ -194,6 +196,7 @@ fermata-golden-checks
 python3 scripts/check_runtime_api.py
 python3 scripts/check_local_service.py
 python3 scripts/check_recovery_evidence.py
+python3 scripts/check_recovery_evidence_example.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
