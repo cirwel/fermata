@@ -1,0 +1,104 @@
+{
+  "schema_version": "0.1",
+  "record_type": "tag_approval_packet",
+  "packet_id": "local-alpha-v0.1.0-tag-approval-packet",
+  "created_at": "2026-06-16T09:43:16Z",
+  "status": "pre_effect_packet",
+  "approval_status": "not_granted",
+  "package_version": "0.1.0",
+  "intended_tag": "v0.1.0",
+  "prepared_from_commit": "2b6adf995b6c173074d6eae9c6e7d38187258240",
+  "release_commit_requirement": {
+    "branch": "main",
+    "must_equal_remote_ref": "origin/main",
+    "release_commit_placeholder": "<fill-with-merged-main-commit-before-tagging>"
+  },
+  "requested_effect": {
+    "effect_kind": "source_control.tag",
+    "operation": "create_and_push_annotated_tag",
+    "tag_name": "v0.1.0",
+    "target_remote": "origin",
+    "tag_message": "Fermata local alpha v0.1.0",
+    "release_notes": "docs/releases/local-alpha-v0.1.0.md",
+    "tag_checklist": "docs/releases/local-alpha-v0.1.0-tag-checklist.md",
+    "release_candidate_record": "references/release-candidates-v0/local-alpha-v0.1.0-rc1.json"
+  },
+  "maintainer_approval": {
+    "required": true,
+    "status": "not_granted",
+    "approval_reference": null,
+    "approved_by": null,
+    "approved_at": null
+  },
+  "exact_commands_after_approval": [
+    "git tag -a v0.1.0 -m \"Fermata local alpha v0.1.0\"",
+    "git push origin v0.1.0"
+  ],
+  "last_minute_rechecks": [
+    {
+      "command": "git status --short --branch",
+      "expect": "clean working tree on main"
+    },
+    {
+      "command": "git rev-parse HEAD origin/main",
+      "expect": "both lines are identical release commit SHAs"
+    },
+    {
+      "command": "git tag --list v0.1.0",
+      "expect": "no output before tag creation"
+    },
+    {
+      "command": "python3 scripts/check_local_alpha_release_artifacts.py",
+      "expect": "top-level status passed"
+    },
+    {
+      "command": "python3 scripts/check_local_alpha_release_candidate.py",
+      "expect": "top-level status passed from clean main matching origin/main"
+    },
+    {
+      "command": "python3 scripts/check_local_alpha_release_candidate_record.py",
+      "expect": "top-level status passed"
+    },
+    {
+      "command": "python3 scripts/check_local_alpha_tag_approval_packet.py",
+      "expect": "top-level status passed"
+    },
+    {
+      "command": "python3 scripts/validate_local_alpha.py",
+      "expect": "top-level status passed"
+    }
+  ],
+  "manual_rechecks": [
+    "Confirm GitHub Actions `ci / golden` passed on the exact release commit.",
+    "Confirm maintainer approval reference is present before running tag commands.",
+    "Confirm no secrets, credentials, tokens, passwords, or connection strings were added.",
+    "Confirm no generated smoke outputs, temporary build outputs, or service records are staged."
+  ],
+  "expected_evidence_to_keep": [
+    "release commit SHA",
+    "maintainer approval reference",
+    "tag object SHA after local tag creation",
+    "python3 scripts/validate_local_alpha.py output summary",
+    "GitHub Actions `ci / golden` URL for the release commit",
+    "python3 scripts/check_local_alpha_release_candidate.py output summary",
+    "python3 scripts/check_local_alpha_release_candidate_record.py output summary",
+    "python3 scripts/check_local_alpha_tag_approval_packet.py output summary"
+  ],
+  "rollback_roll_forward_rule": {
+    "local_tag_created_not_pushed": "Delete the local tag with `git tag -d v0.1.0`, fix forward on a new commit, and rerun every pre-tag recheck.",
+    "tag_pushed": "Do not retarget or delete the pushed tag without an explicit maintainer decision record; fix forward with a new commit and follow-on release decision."
+  },
+  "publication_effects": {
+    "created_tag": false,
+    "pushed_tag": false,
+    "tag_name": "v0.1.0"
+  },
+  "non_claims": [
+    "This packet is not maintainer approval.",
+    "This packet does not create a source-control tag.",
+    "This packet does not push a source-control tag.",
+    "This packet does not claim hosted production readiness.",
+    "This packet does not claim remote adapter safety."
+  ],
+  "next_required_effect": "Explicit maintainer approval is required before creating or pushing v0.1.0."
+}

@@ -19,6 +19,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
 - Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
+- Tag approval packet: `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`
 - Release commit: `<fill-with-merged-main-commit-before-tagging>`
 
 ## Required Checks
@@ -29,6 +30,7 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - [ ] Run `python3 scripts/check_local_alpha_release_candidate.py` from a clean
       `main` checkout matching `origin/main`.
 - [ ] Run `python3 scripts/check_local_alpha_release_candidate_record.py`.
+- [ ] Run `python3 scripts/check_local_alpha_tag_approval_packet.py`.
 - [ ] Run `python3 scripts/validate_local_alpha.py` and attach the top-level
       `"status": "passed"` result.
 - [ ] Confirm GitHub Actions `ci / golden` passed on the exact release commit.
@@ -41,6 +43,8 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - [ ] Confirm no secrets, credentials, tokens, passwords, or connection strings
       are present.
 - [ ] Confirm maintainer approval to create and push the tag.
+- [ ] Record the approval reference in the release handoff before running the
+      tag commands.
 
 ## Tag Command
 
@@ -61,6 +65,7 @@ git push origin v0.1.0
 - package build checker summary;
 - release-candidate dry-run summary;
 - release-candidate record summary;
+- tag approval packet summary;
 - maintainer approval reference.
 
 ## Roll-Forward Rule

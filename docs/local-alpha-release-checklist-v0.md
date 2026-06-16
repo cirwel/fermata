@@ -66,6 +66,12 @@ Check the concrete candidate evidence record with:
 python3 scripts/check_local_alpha_release_candidate_record.py
 ```
 
+Check the pre-tag maintainer approval packet with:
+
+```bash
+python3 scripts/check_local_alpha_tag_approval_packet.py
+```
+
 ## Gates Covered
 
 The validator currently covers:
@@ -96,6 +102,9 @@ The validator currently covers:
   there, and prove the dry run did not create the intended tag;
 - release-candidate record checks that tie a concrete candidate commit to CI,
   dry-run, validator, and no-tag evidence;
+- tag approval packet checks that name the exact source-control tag commands,
+  last-minute rechecks, required maintainer approval, and roll-forward rule
+  without creating or pushing the tag;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -119,6 +128,9 @@ Before presenting a local alpha:
   `origin/main` before any tag is created;
 - the release-candidate record names the candidate commit, CI run URLs, dry-run
   output, and no-tag status;
+- the tag approval packet names the exact tag commands, the last-minute
+  rechecks, the approval reference requirement, and the no-tag/no-push
+  non-effects;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
@@ -142,6 +154,10 @@ python3 scripts/check_local_alpha_release_candidate.py
 
 ```bash
 python3 scripts/check_local_alpha_release_candidate_record.py
+```
+
+```bash
+python3 scripts/check_local_alpha_tag_approval_packet.py
 ```
 
 and the passing CI run for the release commit.

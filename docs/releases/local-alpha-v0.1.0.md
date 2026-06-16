@@ -20,6 +20,8 @@ tag. Tagging remains a separate governed source-control effect.
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
 - Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
+- Tag approval packet: `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`
+- Tag approval packet check: `python3 scripts/check_local_alpha_tag_approval_packet.py`
 - Release scope: local runtime seed, local CLI/API, loopback service, and
   evidence fixtures.
 
@@ -55,6 +57,8 @@ Before `v0.1.0` is created or pushed, attach evidence that:
   `main` checkout matching `origin/main`;
 - `python3 scripts/check_local_alpha_release_candidate_record.py` passed for
   `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`;
+- `python3 scripts/check_local_alpha_tag_approval_packet.py` passed for
+  `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`;
 - `git status --short --branch` was clean on the release commit;
 - the release commit matches the commit named in the tag checklist;
 - no secrets, credentials, tokens, passwords, or connection strings were added;
@@ -76,6 +80,8 @@ The required validator currently reports these gate IDs:
 - `recovery_evidence`
 - `recovery_evidence_example`
 - `release_artifacts`
+- `release_candidate_record`
+- `tag_approval_packet`
 - `package_build`
 - `diff_check`
 
