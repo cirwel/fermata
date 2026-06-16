@@ -1585,6 +1585,33 @@ def run_self_tests() -> dict[str, Any]:
         )
         results["approval_requested_not_decided"] = {"rejected": True}
 
+        # --- Memory adapter symlink anchoring regression ---
+        # A symlink planted at the memory ledger leaf must be refused, not
+        # followed, and must leave the decoy target untouched — parity with the
+        # file adapter and trace ledger.
+        mem_symlink_scope = sample_memory_scope(
+            Path(tmp) / "memory_symlink_sandbox", approval_required=False
+        )
+        mem_ledger = memory_store_path(mem_symlink_scope, "project/notes")
+        mem_ledger.parent.mkdir(parents=True, exist_ok=True)
+        mem_decoy = mem_symlink_scope.sandbox_root / ".fermata-memory" / "decoy.txt"
+        mem_decoy.write_text("untouched\n", encoding="utf-8")
+        os.symlink(mem_decoy, mem_ledger)
+        mem_symlink_effect, _ = evaluate_memory_write(
+            mem_symlink_scope,
+            sample_memory_proposal(),
+        )
+        assert mem_symlink_effect.state == EffectState.REJECTED, (
+            "memory write through a symlinked ledger leaf must be rejected"
+        )
+        assert mem_decoy.read_text(encoding="utf-8") == "untouched\n", (
+            "memory write followed a symlink and corrupted a sibling file"
+        )
+        results["memory_rejects_symlinked_leaf"] = {
+            "rejected": True,
+            "rejection_reason": mem_symlink_effect.rejection_reason,
+        }
+
     return results
 
 
