@@ -32,9 +32,11 @@ from fermata.runtime_ir import (
     EffectState,
     Intent,
     Proposal,
+    RejectionReason,
     Scope,
     Trace,
     approval_for,
+    approval_rejection_reason,
     intent_sha256,
     make_approval_decision,
     now_timestamp,
@@ -1544,6 +1546,44 @@ def run_self_tests() -> dict[str, Any]:
                 "policy parser must reject a second scope block rather than "
                 "silently merge capabilities under the wrong scope_id"
             )
+
+        # --- Approval-binding hardening regressions ---
+        bind_scope = sample_scope(root, approval_required=True)
+        bind_intent = sample_proposal().intent
+        assert bind_intent is not None
+
+        # A correctly bound approval is accepted (no rejection).
+        bound_ok = make_approval_decision(
+            bind_scope, bind_intent, approver="operator:self-test"
+        )
+        assert approval_rejection_reason(bind_scope, bind_intent, bound_ok) is None
+
+        # An "approved" record with no intent binding must not authorize a
+        # commit — otherwise a bare {status: approved} forges authorization for
+        # any intent in scope.
+        unbound = ApprovalDecision(
+            status=ApprovalStatus.APPROVED,
+            authority=ApprovalAuthority.PERFORMER,
+        )
+        assert (
+            approval_rejection_reason(bind_scope, bind_intent, unbound)
+            == RejectionReason.APPROVAL_UNBOUND
+        )
+        results["approval_unbound_rejected"] = {"rejected": True}
+
+        # A not-yet-decided (requested) approval must never read as granted.
+        requested = ApprovalDecision(
+            status=ApprovalStatus.REQUESTED,
+            authority=ApprovalAuthority.PERFORMER,
+            scope_id=bind_scope.scope_id,
+            intent_id=bind_intent.intent_id,
+            intent_sha256=intent_sha256(bind_intent),
+        )
+        assert (
+            approval_rejection_reason(bind_scope, bind_intent, requested)
+            == RejectionReason.APPROVAL_NOT_DECIDED
+        )
+        results["approval_requested_not_decided"] = {"rejected": True}
 
     return results
 
