@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {
+      "bundle": "file-write-paused",
+      "expected_required_input": "approval_decision",
+      "expected_state": "paused",
+      "expected_trace_excludes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "forbidden_paths": [
+        "sandbox/paused-note.txt"
+      ],
+      "name": "file_write_paused"
+    },
+    {
+      "bundle": "file-write-committed",
+      "expected_ack_adapter": "file",
+      "expected_state": "committed",
+      "expected_target_content": {
+        "content": "Committed fixtures pin the run-bundle contract.\n",
+        "path": "sandbox/committed-note.txt"
+      },
+      "name": "file_write_committed"
+    },
+    {
+      "bundle": "file-write-rejected-path-escape",
+      "expected_reason": "path_outside_scope",
+      "expected_state": "rejected",
+      "expected_trace_excludes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "forbidden_paths": [
+        "../outside-write-escape.txt"
+      ],
+      "name": "file_write_rejected_path_escape"
+    },
+    {
+      "bundle": "memory-write-paused",
+      "expected_required_input": "approval_decision",
+      "expected_state": "paused",
+      "expected_trace_excludes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "forbidden_paths": [
+        "sandbox/.fermata-memory/project/paused.jsonl"
+      ],
+      "name": "memory_write_paused"
+    },
+    {
+      "bundle": "memory-write-committed",
+      "expected_ack_adapter": "memory",
+      "expected_memory_content": "Contract fixtures cover memory.write.\n",
+      "expected_state": "committed",
+      "name": "memory_write_committed"
+    }
+  ],
+  "contract": "run-bundle-contract-v0",
+  "schema_version": "0.1"
+}

@@ -71,12 +71,15 @@ docs/
   ai-native-tongue-toolkit.md
   deployability-dossier-v0.md
   local-alpha-release-checklist-v0.md
+  run-bundle-contract-v0.md
   ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
   ai-native-tongue-seed-corpus-v0.jsonl
+  run-bundle-contract-fixtures-v0/
   tongue-golden-tests-v0.json
 scripts/
+  check_run_bundle_contract.py
   governed_effect_file_write_spike.py
   parse_tongue_line.py
   render_tongue_record.py
@@ -88,6 +91,7 @@ examples/
     file-scope.json
     file-write-proposal.json
     file-write-approval.json
+    run-bundle/
 src/
   fermata/
     __init__.py
@@ -219,6 +223,15 @@ To run the same installed-command path as a repeatable smoke test:
 
 ```bash
 python3 scripts/run_cli_smoke.py
+```
+
+To exercise the directory contract for external callers:
+
+```bash
+tmp="$(mktemp -d)"
+cp -R examples/local-alpha/run-bundle "$tmp/run-bundle"
+fermata bundle run "$tmp/run-bundle"
+python3 scripts/check_run_bundle_contract.py
 ```
 
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept

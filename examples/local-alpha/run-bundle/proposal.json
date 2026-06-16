@@ -1,0 +1,27 @@
+{
+  "actor": "agent:local-alpha",
+  "confidence": 0.83,
+  "evidence": [
+    "example:local-alpha-bundle",
+    "scope:local_alpha_bundle_sandbox"
+  ],
+  "intent": {
+    "adapter": "file",
+    "input": {
+      "content": "Bundle runs keep proposal, approval, effect, and trace together.\n"
+    },
+    "intent_id": "intent_local_alpha_bundle_file_write_001",
+    "operation": "write",
+    "proposal_id": "prop_local_alpha_bundle_file_write_001",
+    "required_capability": "file.write",
+    "target": "bundle-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"bundle-note.txt\" because:\"exercise bundle run\""
+  },
+  "proposal_id": "prop_local_alpha_bundle_file_write_001",
+  "reason": "exercise the local alpha run-bundle workflow",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}
