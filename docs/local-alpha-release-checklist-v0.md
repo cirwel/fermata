@@ -72,11 +72,15 @@ Check the pre-tag maintainer approval packet with:
 python3 scripts/check_local_alpha_tag_approval_packet.py
 ```
 
-Check the no-effect publication preflight refusal path with:
+Check the no-effect publication preflight path with:
 
 ```bash
 python3 scripts/check_local_alpha_tag_publication_preflight.py
 ```
+
+Before publication, this proves missing approval is rejected without effects.
+After publication, it accepts the existing local release tag only if the tag
+target is an ancestor of `HEAD`.
 
 After explicit maintainer approval, run the final no-effect publication
 preflight with the approval reference before creating or pushing the tag:
@@ -118,9 +122,10 @@ The validator currently covers:
 - tag approval packet checks that name the exact source-control tag commands,
   last-minute rechecks, required maintainer approval, and roll-forward rule
   without creating or pushing the tag;
-- tag publication preflight checks that reject missing approval by default and,
-  after approval is supplied, rerun strict release checks without creating or
-  pushing the tag;
+- tag publication preflight checks that reject missing approval before
+  publication, accept an existing local release tag only when it points at
+  an ancestor of `HEAD`, and after approval is supplied, rerun strict release
+  checks without creating or pushing the tag;
 - package build checks for wheel, sdist, source manifest contents, and installed
   console entry points;
 - `git diff --check`.
@@ -147,7 +152,8 @@ Before presenting a local alpha:
 - the tag approval packet names the exact tag commands, the last-minute
   rechecks, the approval reference requirement, and the no-tag/no-push
   non-effects;
-- the tag publication preflight either rejects missing approval without effects
+- the tag publication preflight either rejects missing approval without effects,
+  accepts an already-created local tag whose target is an ancestor of `HEAD`,
   or, after approval is supplied, passes strict checks and still records no tag
   creation or push;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
