@@ -1,8 +1,8 @@
 # Fermata
 
 **Created:** May 05, 2026
-**Last Updated:** May 06, 2026
-**Status:** v0 governed-effect runtime seed
+**Last Updated:** June 16, 2026
+**Status:** v0.1.0 local alpha published; main has forward fixes
 
 ---
 
@@ -29,6 +29,20 @@ The second local proof is a governed memory write: an agent proposes
 `memory.write`, the runtime checks capability, provenance, byte budget, and
 approval gates, commits only by appending a scoped JSONL memory record, and
 verifies by reading the record back by ID, version, and SHA-256 evidence.
+
+## Current Release State
+
+Fermata has a published local-alpha prerelease:
+
+- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.0>
+- Annotated tag: `v0.1.0`
+- Tag target: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
+- Package version: `0.1.0`
+
+The published tag is intentionally unchanged. Current `main` is ahead of that
+tag with forward fixes for post-tag validation and installed golden-check
+reference data. Install from current `main` or a later release when you need the
+installed `fermata-golden-checks` command to run outside a source checkout.
 
 ## Why "Fermata"?
 
@@ -200,9 +214,9 @@ JSONL memory record appended and fsynced under the scoped sandbox
 ## Quickstart
 
 The v0 runtime code uses only the Python standard library. The schema-validating
-golden checks use the `dev` extra. The installed `fermata-golden-checks`
-command falls back to packaged reference data when no checkout-local
-`references/` tree is present.
+golden checks use the `dev` extra.
+
+From a source checkout:
 
 ```bash
 python3 -m pip install -e '.[dev]'
@@ -221,6 +235,20 @@ python3 scripts/check_local_alpha_tag_publication_preflight.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
+
+From current `main`, without keeping a checkout:
+
+```bash
+python3 -m pip install 'fermata-runtime[dev] @ git+https://github.com/cirwel/fermata.git@main'
+fermata --help
+fermata-golden-checks
+```
+
+The installed `fermata-golden-checks` command on current `main` falls back to
+packaged reference data when no checkout-local `references/` tree is present.
+The published `v0.1.0` tag predates that packaged-reference fix; its core
+CLI/API install path works, but installed golden checks should be run from a
+checkout or from current `main`.
 
 Expected final status:
 

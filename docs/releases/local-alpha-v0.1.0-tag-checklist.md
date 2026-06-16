@@ -2,28 +2,31 @@
 
 **Created:** June 16, 2026
 **Last Updated:** June 16, 2026
-**Status:** Draft tag checklist
+**Status:** Historical tag checklist
 
 ---
 
 > **Agents may propose; only governed effects may commit.**
 
-This checklist is the source-control publication gate for the local-alpha
-release notes in `docs/releases/local-alpha-v0.1.0.md`.
+This checklist was the source-control publication gate for the local-alpha
+release notes in `docs/releases/local-alpha-v0.1.0.md`. The `v0.1.0` tag has
+now been created and pushed. Keep this file as historical evidence and as the
+template for the next governed tag.
 
 ## Tag Identity
 
 - Package version: `0.1.0`
-- Intended tag: `v0.1.0`
+- Published tag: `v0.1.0`
+- Tag target: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
 - Release notes: `docs/releases/local-alpha-v0.1.0.md`
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
 - Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.0-rc1.json`
 - Tag approval packet: `references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json`
 - Tag publication preflight: `python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>`
-- Release commit: `<fill-with-merged-main-commit-before-tagging>`
+- Release commit: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
 
-## Required Checks
+## Historical Required Checks
 
 - [ ] Confirm the release commit is on `main` and matches `origin/main`.
 - [ ] Confirm `git status --short --branch` is clean.
@@ -48,10 +51,10 @@ release notes in `docs/releases/local-alpha-v0.1.0.md`.
 - [ ] Record the approval reference in the release handoff before running the
       tag commands.
 
-## Tag Command
+## Historical Tag Command
 
-Run only after every required check is complete and the maintainer has approved
-the source-control publication effect:
+These commands were run only after every required check completed and the
+maintainer approved the source-control publication effect:
 
 ```bash
 git tag -a v0.1.0 -m "Fermata local alpha v0.1.0"
@@ -76,3 +79,6 @@ git push origin v0.1.0
 If any required check fails after the tag is created locally but before it is
 pushed, delete the local tag and fix forward on a new commit. Do not retarget a
 pushed tag without an explicit maintainer decision record.
+
+That rule remains active after publication. Post-publication fixes for
+`v0.1.0` have been handled by fix-forward commits on `main`, not by retagging.

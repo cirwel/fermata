@@ -90,9 +90,10 @@ def check_release_notes(notes: str, gate_names: list[str]) -> dict[str, Any]:
 
     required_fragments = [
         "# Fermata Local Alpha v0.1.0 Release Notes",
-        "**Status:** Draft release packet",
+        "**Status:** Published prerelease",
         f"Package version: `{RELEASE_VERSION}`",
-        f"Intended tag: `{RELEASE_TAG}`",
+        f"Published tag: `{RELEASE_TAG}`",
+        "GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.0>",
         f"Required validator: `{VALIDATOR_COMMAND}`",
         f"Release-candidate dry run: `{RELEASE_CANDIDATE_COMMAND}`",
         f"Release-candidate record: `{RELEASE_CANDIDATE_RECORD}`",
@@ -105,6 +106,7 @@ def check_release_notes(notes: str, gate_names: list[str]) -> dict[str, Any]:
         "remote adapter safety",
         "cryptographic trace sealing",
         "general-purpose programming language",
+        "installed golden checks from that\nexact tag need checkout-local references",
     ]
     require_contains(notes, required_fragments, label="release_notes")
     missing_gates = [name for name in gate_names if name not in notes]
@@ -121,9 +123,9 @@ def check_tag_checklist(checklist: str) -> dict[str, Any]:
 
     required_fragments = [
         "# Fermata Local Alpha v0.1.0 Tag Checklist",
-        "**Status:** Draft tag checklist",
+        "**Status:** Historical tag checklist",
         f"Package version: `{RELEASE_VERSION}`",
-        f"Intended tag: `{RELEASE_TAG}`",
+        f"Published tag: `{RELEASE_TAG}`",
         f"Required validator: `{VALIDATOR_COMMAND}`",
         RELEASE_CHECK_COMMAND,
         RELEASE_CANDIDATE_COMMAND,
@@ -132,12 +134,13 @@ def check_tag_checklist(checklist: str) -> dict[str, Any]:
         TAG_PUBLICATION_PREFLIGHT_COMMAND,
         str(RELEASE_CANDIDATE_RECORD),
         str(TAG_APPROVAL_PACKET),
-        "Release commit: `<fill-with-merged-main-commit-before-tagging>`",
+        "Release commit: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`",
         "GitHub Actions `ci / golden`",
         "maintainer approval",
         f"git tag -a {RELEASE_TAG}",
         f"git push origin {RELEASE_TAG}",
         "Do not retarget a\npushed tag",
+        "fix-forward commits on `main`, not by retagging",
     ]
     require_contains(checklist, required_fragments, label="tag_checklist")
     count = checked_item_count(checklist)
