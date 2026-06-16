@@ -53,6 +53,8 @@ The current repo proves a smaller but real core:
   coverage in `scripts/check_runtime_api.py`;
 - loopback-only local service prototype in `docs/local-service-v0.md` with
   subprocess coverage in `scripts/check_local_service.py`;
+- read-only local service record export through `fermata service records`,
+  covered by `scripts/check_local_service.py`;
 - recovery evidence templates for local service incidents and reconciliation in
   `docs/recovery-evidence-v0.md`, checked by
   `scripts/check_recovery_evidence.py`;
@@ -78,9 +80,11 @@ fermata interpret --scope scope.json --proposal proposal.json
 fermata run --scope scope.json --proposal proposal.json --approval approval.json
 fermata bundle run ./bundle
 fermata service run --host 127.0.0.1 --port 8765 --service-root /tmp/fermata-service
+fermata service records --service-root /tmp/fermata-service
 ```
 
-Trace lookup/export remains a future service or CLI extension.
+Trace lookup/export now exists as a read-only local CLI command over service
+record streams. Hosted trace APIs remain out of scope.
 
 ### Run Bundle Contract
 
@@ -149,6 +153,7 @@ the wheel.
 | Bundle contract | Local alpha contract exists | Orchestrator can submit a bundle without imports |
 | Runtime API | Local alpha import surface exists | `check_runtime_api` stays green |
 | Service mode | Loopback local alpha service exists | `check_local_service` stays green |
+| Record export | Read-only local service record export exists | `check_local_service` stays green |
 | Recovery evidence | Incident and reconciliation templates exist | `check_recovery_evidence` stays green |
 | Packaging | Wheel/sdist and entry-point gate exists | `check_package_build` stays green |
 | Hosted production | Out of scope | Separate threat model and readiness review |
@@ -184,5 +189,5 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-Add read-only trace lookup/export over local service records so operators can
-prepare recovery evidence without hand-copying JSONL lines.
+Add a filled recovery-evidence example generated from an actual local service
+run, using `fermata service records` output as the source evidence.

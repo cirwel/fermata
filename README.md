@@ -114,6 +114,7 @@ src/
     runtime_core.py
     runtime_ir.py
     self_tests.py
+    service_records.py
     service.py
 ```
 
@@ -278,6 +279,12 @@ The service exposes `GET /health`, `POST /v0/interpret`, and `POST /v0/run`.
 It binds only to loopback hosts, confines request sandbox roots under
 `--service-root`, and appends request/response/trace/error records under
 `--service-root/records/`.
+
+To inspect those local records without hand-copying JSONL lines:
+
+```bash
+fermata service records --service-root /tmp/fermata-service
+```
 
 Run the subprocess smoke check with:
 

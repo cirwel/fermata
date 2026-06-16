@@ -93,11 +93,14 @@ which evidence it used.
 Run:
 
 ```bash
+fermata service records --service-root /tmp/fermata-service
 python3 scripts/check_recovery_evidence.py
 ```
 
-The checker validates the template files and exercises the same service record
-wrapper helpers used by the local service. It is also part of:
+The `service records` command exports grouped read-only summaries from the local
+service JSONL streams. The checker validates the template files and exercises
+the same service record wrapper helpers used by the local service. It is also
+part of:
 
 ```bash
 python3 scripts/validate_local_alpha.py
@@ -105,5 +108,5 @@ python3 scripts/validate_local_alpha.py
 
 Passing this check means the recovery evidence templates are internally
 consistent with local service record streams. It does not mean Fermata has
-automatic recovery, hosted persistence, trace lookup APIs, or production incident
-response.
+automatic recovery, hosted persistence, hosted trace lookup APIs, or production
+incident response.

@@ -118,6 +118,21 @@ Each stored item includes:
 The service writes with append mode, fsyncs the file, and verifies the appended
 line hash before returning.
 
+Read-only record export is available through the CLI:
+
+```bash
+fermata service records --service-root /tmp/fermata-service
+fermata service records \
+  --service-root /tmp/fermata-service \
+  --request-id svc_req_example_001 \
+  --include-payload
+```
+
+The export groups service records by `request_id`, verifies wrapper
+`payload_sha256` values, includes line hashes, and classifies each request group
+as `committed`, `paused`, `rejected`, `service_error`, `incomplete`, or
+`needs_review`. Payloads are omitted unless `--include-payload` is passed.
+
 ## Local Boundaries
 
 The local service enforces:
@@ -157,6 +172,8 @@ The checker starts the installed `fermata service run` command on
 - approved run commits with acknowledgement and verification;
 - outside-service-root requests return a service error;
 - request, response, trace, and error records are appended;
+- `fermata service records` exports grouped record summaries and can filter by
+  `request_id`;
 - `--host 0.0.0.0` is rejected.
 
 This check is part of `python3 scripts/validate_local_alpha.py`.
@@ -178,4 +195,4 @@ python3 scripts/check_recovery_evidence.py
 ```
 
 The templates are evidence records only. They do not add automatic retry,
-rollback, approval, trace lookup, or production incident response.
+rollback, approval, hosted trace APIs, or production incident response.

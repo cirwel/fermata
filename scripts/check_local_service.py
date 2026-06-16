@@ -108,6 +108,22 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def run_cli_json(command: str, args: list[str]) -> dict[str, Any]:
+    """Run the fermata CLI and return a JSON object."""
+
+    result = subprocess.run(
+        [command, *args],
+        capture_output=True,
+        text=True,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert result.returncode == 0, result
+    data = json.loads(result.stdout)
+    assert isinstance(data, dict)
+    return data
+
+
 def request_envelope(
     *,
     request_id: str,
@@ -313,6 +329,53 @@ def run_service_check(command: str, root: Path) -> dict[str, Any]:
             assert "payload_sha256" in record
             assert "stored_at" in record
 
+        records_export = run_cli_json(
+            command,
+            ["service", "records", "--service-root", str(service_root)],
+        )
+        assert records_export["record_type"] == "service_records_export"
+        assert records_export["status"] == "ok"
+        assert records_export["request_count"] == 4
+        assert records_export["streams"]["requests"]["records"] == 4
+        assert records_export["streams"]["responses"]["records"] == 3
+        assert records_export["streams"]["traces"]["records"] == 3
+        assert records_export["streams"]["errors"]["records"] == 1
+        classes = {
+            row["request_id"]: row["classification"]
+            for row in records_export["requests"]
+        }
+        assert classes == {
+            "svc_req_service_escape_001": "rejected",
+            "svc_req_service_interpret_001": "paused",
+            "svc_req_service_outside_root_001": "service_error",
+            "svc_req_service_run_001": "committed",
+        }
+        default_committed_row = next(
+            row
+            for row in records_export["requests"]
+            if row["request_id"] == "svc_req_service_run_001"
+        )
+        assert "payload" not in default_committed_row["records"]["request"][0]
+        committed_export = run_cli_json(
+            command,
+            [
+                "service",
+                "records",
+                "--service-root",
+                str(service_root),
+                "--request-id",
+                "svc_req_service_run_001",
+                "--include-payload",
+            ],
+        )
+        assert committed_export["request_count"] == 1
+        committed_row = committed_export["requests"][0]
+        assert committed_row["classification"] == "committed"
+        assert committed_row["verification_status"] == "verified"
+        assert committed_row["trace"]["adapter_commit_started"] is True
+        request_ref = committed_row["records"]["request"][0]
+        assert request_ref["payload"]["record_type"] == "service_request"
+
         return {
             "health_status": health["status"],
             "states": {
@@ -325,6 +388,11 @@ def run_service_check(command: str, root: Path) -> dict[str, Any]:
                 "requests": len(requests),
                 "responses": len(responses),
                 "traces": len(traces),
+            },
+            "records_export": {
+                "classifications": classes,
+                "committed_payload_included": "payload" in request_ref,
+                "request_count": records_export["request_count"],
             },
         }
     finally:
