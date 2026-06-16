@@ -20,19 +20,22 @@ except ImportError as exc:  # pragma: no cover - exercised by environment setup.
     ) from exc
 
 
-def default_repo_root() -> Path:
-    """Return the source checkout root when available, otherwise cwd."""
+def default_reference_root() -> Path:
+    """Return source references when available, otherwise packaged references."""
 
     source_root = Path(__file__).resolve().parents[2]
     if (source_root / "references").exists():
-        return source_root
-    return Path.cwd()
+        return source_root / "references"
+    package_root = Path(__file__).resolve().parent / "reference_data"
+    if package_root.exists():
+        return package_root
+    return Path.cwd() / "references"
 
 
-ROOT = default_repo_root()
-DEFAULT_GOLDEN = ROOT / "references" / "tongue-golden-tests-v0.json"
-DEFAULT_SCHEMA = ROOT / "references" / "governed-effect-ir-v0.schema.json"
-DEFAULT_CORPUS = ROOT / "references" / "ai-native-tongue-seed-corpus-v0.jsonl"
+REFERENCE_ROOT = default_reference_root()
+DEFAULT_GOLDEN = REFERENCE_ROOT / "tongue-golden-tests-v0.json"
+DEFAULT_SCHEMA = REFERENCE_ROOT / "governed-effect-ir-v0.schema.json"
+DEFAULT_CORPUS = REFERENCE_ROOT / "ai-native-tongue-seed-corpus-v0.jsonl"
 
 
 def load_schema_validator(schema_path: Path) -> Draft202012Validator:

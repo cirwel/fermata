@@ -60,6 +60,28 @@ EXPECTED_SDIST_FILES = {
     "src/fermata/runtime_api.py",
     "src/fermata/service_records.py",
     "src/fermata/service.py",
+    "src/fermata/reference_data/governed-effect-ir-v0.schema.json",
+    "src/fermata/reference_data/tongue-golden-tests-v0.json",
+    "src/fermata/reference_data/ai-native-tongue-seed-corpus-v0.jsonl",
+}
+
+EXPECTED_WHEEL_DATA = {
+    "fermata/reference_data/__init__.py",
+    "fermata/reference_data/governed-effect-ir-v0.schema.json",
+    "fermata/reference_data/tongue-golden-tests-v0.json",
+    "fermata/reference_data/ai-native-tongue-seed-corpus-v0.jsonl",
+}
+
+REFERENCE_DATA_PAIRS = {
+    "references/governed-effect-ir-v0.schema.json": (
+        "src/fermata/reference_data/governed-effect-ir-v0.schema.json"
+    ),
+    "references/tongue-golden-tests-v0.json": (
+        "src/fermata/reference_data/tongue-golden-tests-v0.json"
+    ),
+    "references/ai-native-tongue-seed-corpus-v0.jsonl": (
+        "src/fermata/reference_data/ai-native-tongue-seed-corpus-v0.jsonl"
+    ),
 }
 
 
@@ -148,7 +170,8 @@ def check_wheel(wheel: Path, source: Path) -> dict[str, Any]:
     """Validate wheel metadata and package module contents."""
 
     expected_modules = {
-        f"fermata/{path.name}" for path in sorted((source / "src/fermata").glob("*.py"))
+        f"fermata/{path.relative_to(source / 'src/fermata').as_posix()}"
+        for path in sorted((source / "src/fermata").rglob("*.py"))
     }
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
@@ -164,6 +187,8 @@ def check_wheel(wheel: Path, source: Path) -> dict[str, Any]:
     unexpected_modules = sorted(package_modules - expected_modules)
     assert not missing_modules, missing_modules
     assert not unexpected_modules, unexpected_modules
+    missing_package_data = sorted(EXPECTED_WHEEL_DATA - names)
+    assert not missing_package_data, missing_package_data
     assert "Name: fermata-runtime" in metadata
     assert "Version: 0.1.0" in metadata
 
@@ -173,6 +198,7 @@ def check_wheel(wheel: Path, source: Path) -> dict[str, Any]:
 
     return {
         "entry_points": sorted(entry_points),
+        "package_data": sorted(EXPECTED_WHEEL_DATA),
         "module_count": len(package_modules),
         "metadata": {"name": "fermata-runtime", "version": "0.1.0"},
     }
@@ -203,6 +229,21 @@ def check_sdist(sdist: Path) -> dict[str, Any]:
     }
 
 
+def check_reference_data_sync(source: Path) -> dict[str, Any]:
+    """Verify packaged reference copies match the canonical source fixtures."""
+
+    checked = []
+    for canonical, packaged in REFERENCE_DATA_PAIRS.items():
+        canonical_path = source / canonical
+        packaged_path = source / packaged
+        assert canonical_path.read_bytes() == packaged_path.read_bytes(), (
+            canonical,
+            packaged,
+        )
+        checked.append({"canonical": canonical, "packaged": packaged})
+    return {"checked": checked}
+
+
 def venv_paths(venv_dir: Path) -> tuple[Path, Path]:
     """Return python executable and scripts directory for a venv."""
 
@@ -225,7 +266,7 @@ def console_script_exists(scripts_dir: Path, name: str) -> bool:
 def check_installed_wheel(wheel: Path, venv_dir: Path) -> dict[str, Any]:
     """Install the wheel in a fresh venv and check entry point wrappers."""
 
-    venv.EnvBuilder(with_pip=True).create(venv_dir)
+    venv.EnvBuilder(with_pip=True, system_site_packages=True).create(venv_dir)
     python, scripts_dir = venv_paths(venv_dir)
     run_command([str(python), "-m", "pip", "install", "--no-index", str(wheel)])
 
@@ -241,6 +282,10 @@ def check_installed_wheel(wheel: Path, venv_dir: Path) -> dict[str, Any]:
             str(python),
             "-c",
             (
+                "from pathlib import Path; "
+                f"venv_root = Path({str(venv_dir)!r}).resolve(); "
+                "import fermata; "
+                "assert Path(fermata.__file__).resolve().is_relative_to(venv_root); "
                 "from fermata import CHORUS, RuntimeOutput, interpret, run; "
                 "assert CHORUS.startswith('Agents may propose'); "
                 "assert RuntimeOutput; assert interpret; assert run"
@@ -254,12 +299,21 @@ def check_installed_wheel(wheel: Path, venv_dir: Path) -> dict[str, Any]:
             'claim "package entry point works" evidence:[package_gate]',
         ]
     )
+    outside_cwd = venv_dir.parent / "outside_cwd"
+    outside_cwd.mkdir()
+    golden_run = run_command(
+        [str(scripts_dir / "fermata-golden-checks")],
+        cwd=outside_cwd,
+    )
+    golden_result = json.loads(golden_run.stdout)
 
     return {
         "console_scripts_present": sorted(EXPECTED_CONSOLE_SCRIPTS),
         "import_check_returncode": import_check.returncode,
         "fermata_help_contains": "Evaluate local governed-effect JSON records."
         in cli_help.stdout,
+        "golden_checks_status": golden_result["status"],
+        "golden_checks_used_packaged_references": not (outside_cwd / "references").exists(),
         "parse_tongue_contains": "package entry point works" in parser_run.stdout,
     }
 
@@ -277,6 +331,7 @@ def main() -> int:
         wheel, sdist = build_artifacts(source_copy, out_dir)
         wheel_result = check_wheel(wheel, source_copy)
         sdist_result = check_sdist(sdist)
+        reference_data_result = check_reference_data_sync(source_copy)
         install_result = check_installed_wheel(wheel, venv_dir)
 
     print(
@@ -288,6 +343,7 @@ def main() -> int:
                 },
                 "checks": {
                     "installed_wheel": install_result,
+                    "reference_data": reference_data_result,
                     "sdist": sdist_result,
                     "wheel": wheel_result,
                 },
