@@ -59,7 +59,8 @@ The validator currently covers:
 - package-level runtime API checks for `interpret` and `run`, including paused,
   rejected, and committed outcomes without shelling out;
 - loopback local service checks for health, interpret, run, service-root
-  confinement, non-loopback bind rejection, and append-only records;
+  confinement, non-loopback bind rejection, append-only records, and read-only
+  record export;
 - recovery evidence template checks for service incident and reconciliation
   reports, including stream names, wrapper record types, and sample
   classifications;
@@ -77,6 +78,7 @@ Before presenting a local alpha:
 - no secrets, credentials, tokens, passwords, or connection strings are present;
 - examples remain local sandbox examples;
 - service runs only on loopback hosts and remains labeled non-production;
+- service record export remains read-only and local to `--service-root`;
 - recovery evidence templates remain evidence packets, not automatic retry,
   rollback, approval, or production incident response;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an

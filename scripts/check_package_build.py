@@ -47,6 +47,7 @@ EXPECTED_SDIST_FILES = {
     "scripts/check_runtime_api.py",
     "scripts/validate_local_alpha.py",
     "src/fermata/runtime_api.py",
+    "src/fermata/service_records.py",
     "src/fermata/service.py",
 }
 

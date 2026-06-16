@@ -19,6 +19,7 @@ from fermata.runtime_api import (
     scope_from_record,
 )
 from fermata.runtime_ir import ApprovalDecision, Proposal, Scope
+from fermata.service_records import ServiceRecordsError, export_service_records
 
 
 def run_effect(
@@ -155,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     service_run_parser.add_argument("--host", default="127.0.0.1")
     service_run_parser.add_argument("--port", type=int, default=8765)
     service_run_parser.add_argument("--service-root", required=True, type=Path)
+    service_records_parser = service_subparsers.add_parser("records")
+    service_records_parser.add_argument("--service-root", required=True, type=Path)
+    service_records_parser.add_argument("--request-id")
+    service_records_parser.add_argument("--include-payload", action="store_true")
     return parser
 
 
@@ -165,14 +170,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "service":
-            from fermata.service import run_service
+            if args.service_command == "run":
+                from fermata.service import run_service
 
-            return run_service(
-                host=args.host,
-                port=args.port,
+                return run_service(
+                    host=args.host,
+                    port=args.port,
+                    service_root=args.service_root,
+                )
+            output = export_service_records(
                 service_root=args.service_root,
+                request_id=args.request_id,
+                include_payload=args.include_payload,
             )
-        if args.command == "bundle":
+        elif args.command == "bundle":
             output = run_bundle(args.bundle_dir, overwrite=args.overwrite)
         else:
             sandbox_root = (
@@ -193,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             effect, trace = run_effect(args.command, scope, proposal, approval=approval)
             output = {"status": "ok", "effect": effect, "trace": trace}
-    except CliError as exc:
+    except (CliError, ServiceRecordsError) as exc:
         print(
             json.dumps({"status": "error", "error": str(exc)}, sort_keys=True),
             file=sys.stderr,
