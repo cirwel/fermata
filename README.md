@@ -91,6 +91,7 @@ scripts/
   check_package_build.py
   check_local_service.py
   check_local_alpha_release_artifacts.py
+  check_local_alpha_release_candidate.py
   check_run_bundle_contract.py
   check_recovery_evidence.py
   check_recovery_evidence_example.py
@@ -202,6 +203,7 @@ python3 scripts/check_local_service.py
 python3 scripts/check_recovery_evidence.py
 python3 scripts/check_recovery_evidence_example.py
 python3 scripts/check_local_alpha_release_artifacts.py
+python3 scripts/check_local_alpha_release_candidate.py --allow-current-branch
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```

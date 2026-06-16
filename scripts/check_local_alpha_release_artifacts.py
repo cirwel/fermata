@@ -15,6 +15,7 @@ RELEASE_NOTES = Path("docs/releases/local-alpha-v0.1.0.md")
 TAG_CHECKLIST = Path("docs/releases/local-alpha-v0.1.0-tag-checklist.md")
 VALIDATOR_COMMAND = "python3 scripts/validate_local_alpha.py"
 RELEASE_CHECK_COMMAND = "python3 scripts/check_local_alpha_release_artifacts.py"
+RELEASE_CANDIDATE_COMMAND = "python3 scripts/check_local_alpha_release_candidate.py"
 
 
 def repo_root() -> Path:
@@ -79,6 +80,7 @@ def check_release_notes(notes: str, gate_names: list[str]) -> dict[str, Any]:
         f"Package version: `{RELEASE_VERSION}`",
         f"Intended tag: `{RELEASE_TAG}`",
         f"Required validator: `{VALIDATOR_COMMAND}`",
+        f"Release-candidate dry run: `{RELEASE_CANDIDATE_COMMAND}`",
         "proposal, intent, approval, and committed-effect boundaries",
         "hosted production readiness",
         "authenticated multi-user operation",
@@ -106,6 +108,7 @@ def check_tag_checklist(checklist: str) -> dict[str, Any]:
         f"Intended tag: `{RELEASE_TAG}`",
         f"Required validator: `{VALIDATOR_COMMAND}`",
         RELEASE_CHECK_COMMAND,
+        RELEASE_CANDIDATE_COMMAND,
         "Release commit: `<fill-with-merged-main-commit-before-tagging>`",
         "GitHub Actions `ci / golden`",
         "maintainer approval",
