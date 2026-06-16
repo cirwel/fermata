@@ -1,0 +1,104 @@
+{
+  "schema_version": "0.1",
+  "record_type": "service_incident_report_template",
+  "template_version": "0.1",
+  "incident_id": "svc_inc_example_001",
+  "status": "draft",
+  "opened_at": "2026-06-16T00:00:00Z",
+  "prepared_by": {
+    "subject": "operator:local"
+  },
+  "_template_notes": [
+    "Replace sample text and identifiers before use.",
+    "The hash strings below are placeholders; replace them with computed SHA-256 values from the archived JSONL records."
+  ],
+  "service": {
+    "service_root": "/tmp/fermata-service",
+    "loopback_only": true,
+    "production": false
+  },
+  "trigger": {
+    "kind": "operator_review",
+    "detected_at": "2026-06-16T00:00:00Z",
+    "summary": "Replace this text with the observed service condition."
+  },
+  "scope": {
+    "request_ids": [
+      "svc_req_example_001"
+    ],
+    "operations": [
+      "run"
+    ],
+    "time_window": {
+      "started_at": "2026-06-16T00:00:00Z",
+      "ended_at": "2026-06-16T00:05:00Z"
+    }
+  },
+  "observed_records": [
+    {
+      "stream": "requests",
+      "path": "records/requests.jsonl",
+      "line": 1,
+      "record_type": "service_request_item",
+      "request_id": "svc_req_example_001",
+      "operation": "run",
+      "payload_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "line_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "payload_excerpt": {
+        "record_type": "service_request",
+        "operation": "run"
+      }
+    },
+    {
+      "stream": "responses",
+      "path": "records/responses.jsonl",
+      "line": 1,
+      "record_type": "service_response_item",
+      "request_id": "svc_req_example_001",
+      "operation": "run",
+      "payload_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "line_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "payload_excerpt": {
+        "record_type": "service_response",
+        "effect_state": "committed"
+      }
+    },
+    {
+      "stream": "traces",
+      "path": "records/traces.jsonl",
+      "line": 1,
+      "record_type": "service_trace_item",
+      "request_id": "svc_req_example_001",
+      "operation": "run",
+      "payload_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "line_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "payload_excerpt": {
+        "record_type": "trace",
+        "event_types": [
+          "adapter.commit.started",
+          "effect.committed"
+        ]
+      }
+    }
+  ],
+  "runtime_read": "Do not infer committed, rejected, or paused from a request record alone. Reconcile response and trace records first.",
+  "committed_effect_claim": {
+    "claim": "unverified",
+    "basis": [],
+    "notes": "Change to verified only when the reconciled response effect is committed and carries adapter acknowledgement plus verification evidence."
+  },
+  "operator_decision": {
+    "decision": "needs_human_review",
+    "reason": "Replace this text with the reviewed evidence summary.",
+    "next_safe_steps": [
+      "complete service reconciliation report",
+      "preserve records directory snapshot"
+    ]
+  },
+  "non_claims": [
+    "automatic_retry",
+    "rollback_completed",
+    "approval_granted",
+    "hosted_production_incident_response"
+  ]
+}

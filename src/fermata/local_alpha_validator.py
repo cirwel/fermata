@@ -74,6 +74,11 @@ def gates() -> list[Gate]:
             parses_json=True,
         ),
         Gate(
+            "recovery_evidence",
+            [python, "scripts/check_recovery_evidence.py"],
+            parses_json=True,
+        ),
+        Gate(
             "package_build",
             [python, "scripts/check_package_build.py"],
             parses_json=True,

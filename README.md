@@ -73,18 +73,21 @@ docs/
   deployability-dossier-v0.md
   local-alpha-release-checklist-v0.md
   local-service-v0.md
+  recovery-evidence-v0.md
   run-bundle-contract-v0.md
   runtime-api-v0.md
   ugly-trace-v0.md
 references/
   governed-effect-ir-v0.schema.json
   ai-native-tongue-seed-corpus-v0.jsonl
+  recovery-evidence-templates-v0/
   run-bundle-contract-fixtures-v0/
   tongue-golden-tests-v0.json
 scripts/
   check_package_build.py
   check_local_service.py
   check_run_bundle_contract.py
+  check_recovery_evidence.py
   check_runtime_api.py
   governed_effect_file_write_spike.py
   parse_tongue_line.py
@@ -189,6 +192,7 @@ python3 -m json.tool references/tongue-golden-tests-v0.json >/tmp/fermata_golden
 fermata-golden-checks
 python3 scripts/check_runtime_api.py
 python3 scripts/check_local_service.py
+python3 scripts/check_recovery_evidence.py
 python3 scripts/check_package_build.py
 python3 scripts/validate_local_alpha.py
 ```
@@ -283,6 +287,14 @@ python3 scripts/check_local_service.py
 
 The service contract is documented in
 [docs/local-service-v0.md](docs/local-service-v0.md).
+
+Recovery evidence templates for service incident and reconciliation review are
+documented in [docs/recovery-evidence-v0.md](docs/recovery-evidence-v0.md) and
+checked with:
+
+```bash
+python3 scripts/check_recovery_evidence.py
+```
 
 The script wrapper `python3 scripts/governed_effect_file_write_spike.py` is kept
 for continuity with the first boring adapter.
