@@ -27,6 +27,12 @@ from fermata.memory_adapter import (
     sample_memory_scope,
     validate_memory_record,
 )
+from fermata.network_adapter import (
+    NetworkFetchAdapter,
+    evaluate_network_fetch,
+    sample_network_proposal,
+    sample_network_scope,
+)
 from fermata.policy_parser import (
     PolicyParseError,
     parse_agent_proposal_json,
@@ -88,6 +94,7 @@ __all__ = [
     "MEMORY_LIFESPANS",
     "MEMORY_RECORD_STRING_FIELDS",
     "MemoryWriteAdapter",
+    "NetworkFetchAdapter",
     "PolicyParseError",
     "Proposal",
     "RejectionReason",
@@ -103,6 +110,7 @@ __all__ = [
     "ensure_private_directory",
     "evaluate_file_write",
     "evaluate_memory_write",
+    "evaluate_network_fetch",
     "evaluate_with_adapter",
     "intent_sha256",
     "interpret",
@@ -123,6 +131,8 @@ __all__ = [
     "run_self_tests",
     "sample_memory_proposal",
     "sample_memory_scope",
+    "sample_network_proposal",
+    "sample_network_scope",
     "sample_proposal",
     "sample_scope",
     "sha256_bytes",

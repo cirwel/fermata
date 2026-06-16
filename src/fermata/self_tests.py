@@ -22,6 +22,11 @@ from fermata.memory_adapter import (
     sample_memory_proposal,
     sample_memory_scope,
 )
+from fermata.network_adapter import (
+    evaluate_network_fetch,
+    sample_network_proposal,
+    sample_network_scope,
+)
 from fermata.runtime_core import append_trace_ledger, trace_ledger_path
 from fermata.runtime_ir import (
     AdapterPreparation,
@@ -1611,6 +1616,145 @@ def run_self_tests() -> dict[str, Any]:
             "rejected": True,
             "rejection_reason": mem_symlink_effect.rejection_reason,
         }
+
+        # --- Network fetch adapter acceptance (hermetic loopback) ---
+        import http.server
+        import threading
+
+        fetch_body = b"governed fetch acceptance\n"
+
+        class _FixtureHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                if self.path == "/redirect":
+                    self.send_response(302)
+                    self.send_header("Location", "http://example.com/elsewhere")
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(fetch_body)))
+                self.end_headers()
+                self.wfile.write(fetch_body)
+
+            def log_message(self, *args):  # silence
+                return
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), _FixtureHandler)
+        net_port = server.server_address[1]
+        net_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        net_thread.start()
+        try:
+            net_root = Path(tmp) / "network_sandbox"
+            prefix = f"http://127.0.0.1:{net_port}/"
+            ok_url = f"http://127.0.0.1:{net_port}/data"
+
+            # Happy path: allowlisted loopback (private opt-in), no approval.
+            net_scope = sample_network_scope(
+                net_root,
+                allow_prefix=prefix,
+                approval_required=False,
+                allow_private_network=True,
+            )
+            net_committed, _ = evaluate_network_fetch(
+                net_scope, sample_network_proposal(ok_url)
+            )
+            assert net_committed.state == EffectState.COMMITTED, net_committed.state
+            assert net_committed.verification["status"] == "verified"
+            persisted = Path(net_committed.acknowledgement["target"])
+            assert persisted.read_bytes() == fetch_body
+            results["network_fetch_commits"] = net_committed.to_record()
+
+            # Allowlist miss → rejected, no file.
+            miss_scope = sample_network_scope(
+                net_root,
+                allow_prefix="http://127.0.0.1:1/",
+                approval_required=False,
+                allow_private_network=True,
+            )
+            net_miss, _ = evaluate_network_fetch(
+                miss_scope, sample_network_proposal(ok_url, target="responses/miss.bin")
+            )
+            assert net_miss.state == EffectState.REJECTED
+            assert net_miss.rejection_reason == "network_url_not_in_allowlist"
+            results["network_allowlist_miss_rejected"] = {"rejected": True}
+
+            # Non-http scheme → rejected before any connection.
+            net_scheme, _ = evaluate_network_fetch(
+                net_scope, sample_network_proposal("file:///etc/passwd")
+            )
+            assert net_scheme.rejection_reason == "network_scheme_unsupported"
+            results["network_scheme_rejected"] = {"rejected": True}
+
+            # Private/loopback target WITHOUT opt-in → rejected (SSRF guard).
+            private_scope = sample_network_scope(
+                net_root,
+                allow_prefix=prefix,
+                approval_required=False,
+                allow_private_network=False,
+            )
+            net_private, _ = evaluate_network_fetch(
+                private_scope,
+                sample_network_proposal(ok_url, target="responses/priv.bin"),
+            )
+            assert net_private.rejection_reason == "network_host_is_private"
+            results["network_private_host_rejected"] = {"rejected": True}
+
+            # Redirect → rejected (no following).
+            net_redirect, _ = evaluate_network_fetch(
+                net_scope,
+                sample_network_proposal(
+                    f"http://127.0.0.1:{net_port}/redirect",
+                    target="responses/redir.bin",
+                ),
+            )
+            assert net_redirect.rejection_reason == "network_redirect_not_allowed"
+            results["network_redirect_rejected"] = {"rejected": True}
+
+            # Response larger than the scope byte budget → rejected.
+            small_scope = Scope(
+                scope_id="local_network_sandbox",
+                sandbox_root=net_root.resolve(),
+                capabilities=frozenset({"network.fetch"}),
+                network_allow=(prefix,),
+                allow_private_network=True,
+                max_bytes=8,
+            )
+            net_big, _ = evaluate_network_fetch(
+                small_scope,
+                sample_network_proposal(ok_url, target="responses/big.bin"),
+            )
+            assert net_big.rejection_reason == "network_response_too_large"
+            results["network_response_too_large_rejected"] = {"rejected": True}
+
+            # Approval required, none supplied → paused before any request.
+            approval_scope = sample_network_scope(
+                net_root,
+                allow_prefix=prefix,
+                approval_required=True,
+                allow_private_network=True,
+            )
+            net_paused, net_paused_trace = evaluate_network_fetch(
+                approval_scope,
+                sample_network_proposal(ok_url, target="responses/paused.bin"),
+            )
+            assert net_paused.state == EffectState.PAUSED
+            assert net_paused.required_input == "approval_decision"
+            assert "adapter.commit.started" not in [
+                event["type"] for event in net_paused_trace.events
+            ]
+            results["network_approval_required_pauses"] = net_paused.to_record()
+
+            # interpret() stops before any network call.
+            net_interpret, net_interpret_trace = interpret(
+                approval_scope,
+                sample_network_proposal(ok_url, target="responses/interp.bin"),
+            )
+            assert net_interpret.state == EffectState.PAUSED
+            assert "adapter.commit.started" not in [
+                event["type"] for event in net_interpret_trace.events
+            ]
+        finally:
+            server.shutdown()
+            net_thread.join(timeout=5)
 
     return results
 

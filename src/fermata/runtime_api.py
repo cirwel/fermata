@@ -12,6 +12,7 @@ from typing import Any, Literal
 from fermata.file_adapter import evaluate_file_write
 from fermata.interpreter import interpret as interpret_effect
 from fermata.memory_adapter import evaluate_memory_write
+from fermata.network_adapter import evaluate_network_fetch
 from fermata.runtime_ir import (
     ApprovalAuthority,
     ApprovalDecision,
@@ -224,6 +225,20 @@ def scope_from_record(
                     )
             approval_required_for.update(named)
 
+    raw_network_allow = record.get("network_allow", [])
+    if raw_network_allow:
+        if not isinstance(raw_network_allow, list) or not all(
+            isinstance(item, str) and item for item in raw_network_allow
+        ):
+            raise RuntimeApiError(
+                "scope.network_allow must be an array of non-empty strings"
+            )
+    network_allow = tuple(raw_network_allow)
+
+    raw_allow_private = record.get("allow_private_network", False)
+    if not isinstance(raw_allow_private, bool):
+        raise RuntimeApiError("scope.allow_private_network must be a boolean")
+
     return Scope(
         scope_id=require_string(record, "scope_id", label="scope"),
         sandbox_root=sandbox_root.resolve(),
@@ -233,6 +248,8 @@ def scope_from_record(
             record.get("max_bytes", max_bytes),
             label="scope.max_bytes",
         ),
+        network_allow=network_allow,
+        allow_private_network=raw_allow_private,
     )
 
 
@@ -383,6 +400,16 @@ def evaluate(
             and intent.operation == "write"
         ):
             effect, trace = evaluate_memory_write(
+                runtime_scope,
+                runtime_proposal,
+                approval=runtime_approval,
+            )
+        elif (
+            intent is not None
+            and intent.adapter == "network"
+            and intent.operation == "fetch"
+        ):
+            effect, trace = evaluate_network_fetch(
                 runtime_scope,
                 runtime_proposal,
                 approval=runtime_approval,
