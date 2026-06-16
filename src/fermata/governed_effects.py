@@ -39,6 +39,7 @@ from fermata.policy_parser import (
     parse_policy_block,
 )
 from fermata.runtime_core import (
+    anchored_atomic_write,
     append_trace_ledger,
     approved_result,
     ensure_private_directory,
@@ -101,6 +102,7 @@ __all__ = [
     "Scope",
     "SpeechAct",
     "Trace",
+    "anchored_atomic_write",
     "append_trace_ledger",
     "approval_for",
     "approval_rejection_reason",

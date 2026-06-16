@@ -32,17 +32,18 @@ from __future__ import annotations
 
 import http.client
 import ipaddress
-import os
 import socket
 import urllib.error
 import urllib.request
-import uuid
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlsplit
 
-from fermata.file_adapter import nofollow_file_flags, open_file_parent_fd
-from fermata.runtime_core import evaluate_with_adapter, is_inside, reject
+from fermata.runtime_core import (
+    anchored_atomic_write,
+    evaluate_with_adapter,
+    is_inside,
+    reject,
+)
 from fermata.runtime_ir import (
     AdapterPreparation,
     ApprovalDecision,
@@ -363,9 +364,19 @@ class NetworkFetchAdapter:
             )
 
         body_hash = sha256_bytes(body)
-        persisted = self._persist_response(scope, response_path, body, body_hash, trace)
-        if isinstance(persisted, EffectResult):
-            # _persist_response already added a trace event and returns a reject
+
+        def _verify_readback(readback: bytes) -> None:
+            if sha256_bytes(readback) != body_hash:
+                raise ValueError("response_read_back_mismatch")
+
+        try:
+            anchored_atomic_write(scope, response_path, body, verify=_verify_readback)
+        except (OSError, ValueError) as exc:
+            trace.add(
+                "adapter.persist.failed",
+                error_type=exc.__class__.__name__,
+                target=str(response_path),
+            )
             return reject(
                 trace,
                 scope,
@@ -397,72 +408,6 @@ class NetworkFetchAdapter:
             verification=verification,
             committed_at=now_timestamp(),
         )
-
-    def _persist_response(
-        self,
-        scope: Scope,
-        response_path: Path,
-        body: bytes,
-        body_hash: str,
-        trace: Trace,
-    ) -> bool | EffectResult:
-        """Write the response body through an O_NOFOLLOW anchored walk + read-back.
-
-        Returns True on verified persistence, or an EffectResult sentinel on
-        failure (the caller maps it to ADAPTER_COMMIT_FAILED).
-        """
-
-        nofollow = getattr(os, "O_NOFOLLOW", 0)
-        ledger_name = response_path.name
-        temp_name = f".{ledger_name}.{uuid.uuid4().hex}.tmp"
-        replaced = False
-        parent_fd = open_file_parent_fd(scope, response_path)
-        try:
-            try:
-                fd = os.open(
-                    temp_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
-                    0o600,
-                    dir_fd=parent_fd,
-                )
-                with os.fdopen(fd, "wb") as temp_file:
-                    os.fchmod(temp_file.fileno(), 0o600)
-                    temp_file.write(body)
-                    temp_file.flush()
-                    os.fsync(temp_file.fileno())
-
-                read_fd = os.open(temp_name, nofollow_file_flags(), dir_fd=parent_fd)
-                with os.fdopen(read_fd, "rb") as temp_file:
-                    readback = temp_file.read()
-                if sha256_bytes(readback) != body_hash:
-                    raise ValueError("response_read_back_mismatch")
-
-                os.replace(
-                    temp_name,
-                    ledger_name,
-                    src_dir_fd=parent_fd,
-                    dst_dir_fd=parent_fd,
-                )
-                replaced = True
-                try:
-                    os.fsync(parent_fd)
-                except OSError:
-                    pass
-            except (OSError, ValueError) as exc:
-                if not replaced:
-                    try:
-                        os.unlink(temp_name, dir_fd=parent_fd)
-                    except OSError:
-                        pass
-                trace.add(
-                    "adapter.persist.failed",
-                    error_type=exc.__class__.__name__,
-                    target=str(response_path),
-                )
-                return reject(trace, scope, None, RejectionReason.ADAPTER_COMMIT_FAILED)
-        finally:
-            os.close(parent_fd)
-        return True
 
 
 def evaluate_network_fetch(

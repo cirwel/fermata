@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,77 @@ def ensure_private_directory(path: Path, *, root: Path) -> None:
     for part in resolved_path.relative_to(resolved_root).parts:
         current = current / part
         os.chmod(current, 0o700)
+
+
+def anchored_atomic_write(
+    scope: Scope,
+    target_path: Path,
+    content_bytes: bytes,
+    *,
+    verify: Callable[[bytes], None],
+) -> None:
+    """Atomically write ``content_bytes`` to ``target_path``, symlink-safe.
+
+    The shared anchored-write primitive used by the memory and network adapters.
+    It reaches the target's parent directory by the file adapter's O_NOFOLLOW
+    walk from the sandbox, creates a temp file in that directory fd
+    (``O_EXCL | O_NOFOLLOW``), fsyncs it, reads it back through the same fd, and
+    calls ``verify(readback_bytes)`` — which must raise to abort *before* any
+    replace. Only then does it rename the temp over the target and fsync the
+    directory. No symlink at any path component can redirect the write or the
+    read-back.
+
+    Raises ``OSError`` / ``ValueError`` on any failure or verify rejection; the
+    temp file is removed on failure. Callers map the exception to a governed
+    rejection. The best-effort directory fsync after replace never fails the
+    write (matching the file adapter).
+    """
+
+    # Local import: file_adapter imports runtime_core, so importing it at module
+    # scope would be circular. open_file_parent_fd is the shared anchored walk.
+    from fermata.file_adapter import open_file_parent_fd
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    target_name = target_path.name
+    temp_name = f".{target_name}.{uuid.uuid4().hex}.tmp"
+    replaced = False
+    parent_fd = open_file_parent_fd(scope, target_path)
+    try:
+        fd = os.open(
+            temp_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with os.fdopen(fd, "wb") as temp_file:
+            os.fchmod(temp_file.fileno(), 0o600)
+            temp_file.write(content_bytes)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+
+        read_fd = os.open(temp_name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
+        with os.fdopen(read_fd, "rb") as temp_file:
+            readback = temp_file.read()
+        verify(readback)
+
+        os.replace(
+            temp_name,
+            target_name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        replaced = True
+        try:
+            os.fsync(parent_fd)
+        except OSError:
+            pass
+    finally:
+        if not replaced:
+            try:
+                os.unlink(temp_name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        os.close(parent_fd)
 
 
 def reject(
