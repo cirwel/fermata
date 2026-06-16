@@ -331,7 +331,8 @@ committed = run(
 ```
 
 The API contract is documented in
-[docs/runtime-api-v0.md](docs/runtime-api-v0.md).
+[docs/runtime-api-v0.md](docs/runtime-api-v0.md). To add a new governed effect,
+see [docs/adding-an-adapter-v0.md](docs/adding-an-adapter-v0.md).
 
 ## Try the loopback local service
 
