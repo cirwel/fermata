@@ -1,7 +1,7 @@
 # Tongue Evaluation Rubric v0
 
 **Created:** May 05, 2026
-**Last Updated:** May 06, 2026
+**Last Updated:** June 16, 2026
 **Status:** Draft
 
 ---
@@ -61,6 +61,11 @@ Run them with:
 python3 -m pip install -e '.[dev]'
 fermata-golden-checks
 ```
+
+When installed from current `main` or a later package that includes
+`src/fermata/reference_data`, `fermata-golden-checks` can also run outside a
+source checkout by using packaged copies of the schema, golden tests, and seed
+corpus.
 
 ## Machine Checks
 

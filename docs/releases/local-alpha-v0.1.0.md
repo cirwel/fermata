@@ -2,20 +2,24 @@
 
 **Created:** June 16, 2026
 **Last Updated:** June 16, 2026
-**Status:** Draft release packet
+**Status:** Published prerelease
 
 ---
 
 > **Agents may propose; only governed effects may commit.**
 
-These notes define the local-alpha release packet for Fermata package version
-`0.1.0`. They are not a publication event and do not create a source-control
-tag. Tagging remains a separate governed source-control effect.
+These notes began as the local-alpha release packet for Fermata package version
+`0.1.0`. The governed publication effect has now occurred: `v0.1.0` is a
+published GitHub prerelease. The source-control tag remains a separate governed
+effect from the release notes, and it was created and pushed only after explicit
+maintainer approval.
 
 ## Release Identity
 
 - Package version: `0.1.0`
-- Intended tag: `v0.1.0`
+- Published tag: `v0.1.0`
+- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.0>
+- Tag target: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
 - Tag checklist: `docs/releases/local-alpha-v0.1.0-tag-checklist.md`
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
@@ -25,6 +29,21 @@ tag. Tagging remains a separate governed source-control effect.
 - Tag publication preflight: `python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>`
 - Release scope: local runtime seed, local CLI/API, loopback service, and
   evidence fixtures.
+
+## Post-Publication Notes
+
+The published `v0.1.0` tag is intentionally unchanged. Current `main` is ahead
+of the tag with forward fixes:
+
+- post-tag validation now accepts an existing release tag whose target is an
+  ancestor of `HEAD`;
+- installed golden checks now carry packaged schema, golden, and seed-corpus
+  reference data so `fermata-golden-checks` can run outside a source checkout.
+
+A fresh-consumer install from the published `v0.1.0` source archive proved the
+core CLI/API path works. It also found that installed golden checks from that
+exact tag need checkout-local references. Use current `main` or a later release
+when installed golden checks must run from a clean consumer directory.
 
 ## What This Local Alpha Includes
 
@@ -46,9 +65,9 @@ tag. Tagging remains a separate governed source-control effect.
   entry points;
 - one local-alpha validator command that runs the complete checked gate.
 
-## Required Evidence Before Tagging
+## Historical Required Evidence Before Tagging
 
-Before `v0.1.0` is created or pushed, attach evidence that:
+Before `v0.1.0` was created or pushed, the required evidence was:
 
 - `python3 scripts/validate_local_alpha.py` returned top-level
   `"status": "passed"`;

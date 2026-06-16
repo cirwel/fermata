@@ -2,7 +2,7 @@
 
 **Created:** June 15, 2026
 **Last Updated:** June 16, 2026
-**Status:** Draft
+**Status:** Active local-alpha evidence
 
 ---
 
@@ -11,6 +11,19 @@
 This dossier names the distance between the current Fermata runtime seed and a
 deployable programming-language substrate people would actually use. It is a
 planning and evidence artifact, not a deployability claim.
+
+## 0. Publication State
+
+The first local-alpha source publication exists:
+
+- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.0>
+- Annotated tag: `v0.1.0`
+- Tag target: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
+- Package version: `0.1.0`
+
+Current `main` is intentionally ahead of that tag. The post-tag validation fix
+and packaged-reference fix for installed golden checks were landed as forward
+fixes after publication, without retargeting or recreating `v0.1.0`.
 
 ## 1. Deployable Means
 
@@ -143,8 +156,9 @@ remote safety are still outside the current claim.
 The local service prototype is loopback-only, append-only, and labeled
 non-production. It exposes health, interpret, and run endpoints around the same
 runtime API used by the CLI. Authentication, hosted persistence, process
-isolation, approval queues, trace lookup/export, and remote adapter safety are
-still outside the current claim.
+isolation, approval queues, hosted trace APIs, and remote adapter safety are
+still outside the current claim. Read-only local record export exists through
+`fermata service records`.
 
 ### Release Evidence
 
@@ -187,6 +201,13 @@ rejected without effects. After publication, normal validation accepts the local
 release tag only when its target is an ancestor of `HEAD`. When an explicit
 approval reference is supplied before tagging, the preflight reruns the strict
 pre-tag checks and still only returns the exact commands to run next.
+
+The fresh-consumer install check after publication found that the `v0.1.0` core
+CLI/API path installs and runs, but installed `fermata-golden-checks` could not
+run from a clean consumer directory because the reference files were not
+packaged. Current `main` fixes that by packaging the schema, golden tests, and
+seed corpus under `src/fermata/reference_data` and proving the installed command
+uses those packaged references outside a checkout.
 
 ## 4. Readiness Matrix
 
@@ -242,7 +263,8 @@ This dossier does not claim:
 
 ## 7. Next Safe Step
 
-After explicit maintainer approval is recorded, rerun the strict pre-tag checks
-from clean `main` matching `origin/main`, run the final publication preflight
-with the approval reference, then create and push the annotated `v0.1.0` tag
-exactly as named in the approval packet.
+Prepare the next release decision. The conservative path is a small patch
+release candidate that includes the post-tag validation and packaged-reference
+fixes now on `main`. The alternative is to leave `v0.1.0` as the historical
+first local alpha and continue with the next deployability slice before tagging
+again.

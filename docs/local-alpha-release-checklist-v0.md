@@ -2,7 +2,7 @@
 
 **Created:** June 16, 2026
 **Last Updated:** June 16, 2026
-**Status:** Draft
+**Status:** Active post-publication local-alpha gate
 
 ---
 
@@ -11,6 +11,14 @@
 This checklist defines the current "local alpha" gate for the checked-in
 Fermata runtime seed. It is intentionally narrower than hosted or service
 readiness.
+
+`v0.1.0` has been published as a GitHub prerelease at
+<https://github.com/cirwel/fermata/releases/tag/v0.1.0>. The source-control tag
+points at `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`. Current `main` includes
+post-publication forward fixes, so this checklist now serves two roles:
+
+- ongoing validation for current `main`;
+- the template for the next governed source-control tag effect.
 
 ## Required Command
 
@@ -82,8 +90,9 @@ Before publication, this proves missing approval is rejected without effects.
 After publication, it accepts the existing local release tag only if the tag
 target is an ancestor of `HEAD`.
 
-After explicit maintainer approval, run the final no-effect publication
-preflight with the approval reference before creating or pushing the tag:
+For the next tag, after explicit maintainer approval, run the final no-effect
+publication preflight with the approval reference before creating or pushing the
+tag:
 
 ```bash
 python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>
@@ -127,12 +136,13 @@ The validator currently covers:
   an ancestor of `HEAD`, and after approval is supplied, rerun strict release
   checks without creating or pushing the tag;
 - package build checks for wheel, sdist, source manifest contents, packaged
-  reference data, and installed console entry points;
+  reference data, installed console entry points, and installed
+  `fermata-golden-checks` execution from a cwd without `references/`;
 - `git diff --check`.
 
 ## Release-Ready Conditions
 
-Before presenting a local alpha:
+Before presenting the next local alpha or patch release:
 
 - validator status is `passed`;
 - CI has passed on the release commit;
@@ -158,6 +168,8 @@ Before presenting a local alpha:
   creation or push;
 - wheel and sdist artifacts are built from a clean temporary source copy, not an
   ignored local `build/` directory;
+- installed golden checks run from packaged reference data outside a source
+  checkout;
 - docs still distinguish local CLI/runtime readiness from hosted or multi-user
   service readiness;
 - changes preserve proposal, intent, approval, and committed-effect boundaries.
@@ -189,14 +201,16 @@ python3 scripts/check_local_alpha_tag_approval_packet.py
 python3 scripts/check_local_alpha_tag_publication_preflight.py
 ```
 
-and the passing CI run for the release commit.
+and the passing CI run for the release commit. For post-publication forward
+fixes, include the current `main` CI run and state whether the existing tag was
+left unchanged.
 
 ## Still Not v1
 
 Passing local alpha validation does not imply:
 
 - hosted or multi-user service is implemented;
-- approval queues, trace lookup/export, or service authentication are
+- approval queues, hosted trace lookup/export, or service authentication are
   implemented;
 - remote adapters are safe;
 - OS-level adapter process isolation is implemented;
