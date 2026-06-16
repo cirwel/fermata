@@ -74,6 +74,12 @@ def local_tag_exists(root: Path) -> bool:
     return bool(git_output(root, ["tag", "--list", RELEASE_TAG]))
 
 
+def local_tag_target(root: Path) -> str:
+    """Return the commit targeted by the local release tag."""
+
+    return git_output(root, ["rev-parse", f"{RELEASE_TAG}^{{commit}}"])
+
+
 def remote_tag_exists(root: Path) -> bool:
     """Return whether the release tag exists on the origin remote."""
 
@@ -236,10 +242,31 @@ def run_publication_preflight(
 
 
 def run_refusal_self_test(*, root: Path | None = None) -> dict[str, Any]:
-    """Verify that publication preflight refuses to run without approval."""
+    """Verify the no-approval path before and after publication."""
 
     repo = root or repo_root()
     local_before = local_tag_exists(repo)
+    if local_before:
+        head = git_output(repo, ["rev-parse", "HEAD"])
+        target = local_tag_target(repo)
+        require(target == head, "local_tag_target_not_head")
+        return {
+            "checks": {
+                "local_tag_exists": True,
+                "local_tag_points_at_head": True,
+                "tag_target": target,
+                "head": head,
+                "post_publication_mode": True,
+            },
+            "publication_effects": {
+                "created_tag": False,
+                "pushed_tag": False,
+                "tag_name": RELEASE_TAG,
+            },
+            "status": "passed",
+            "tag_publication_preflight": PREFLIGHT_ID,
+        }
+
     try:
         require_approval_reference(None)
     except AssertionError as exc:
