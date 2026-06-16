@@ -102,3 +102,22 @@ An AI-native tongue should be:
 - grounded in memory and evidence without exposing private chain-of-thought
 
 Avoid turning the language into a hidden-thought transcript. Prefer a public expressive layer: claims, feelings, needs, evidence, questions, boundaries, and proposed actions.
+
+## Runtime Bridge
+
+The runtime layer connects the spoken tongue to the governed-effect runtime via
+`fermata.tongue_bridge`. `propose_from_utterance(line)` parses a public speech
+act and acknowledges it as a `PROPOSAL`-state effect with a durable trace —
+recorded and auditable, but never committed, because a speech act is not an
+effect.
+
+Effect `intend` records are deliberately *not* spoken into existence: per the
+v0 charter the tongue parser does not parse `intend`, and the bridge refuses an
+`intend` line with a `TongueBridgeError`. Intents must arrive as a
+JSON-Schema-validated proposal and run through the full governed state machine
+(`runtime_api.run` / `interpret`). The line between "an agent said it" and "the
+runtime did it" stays explicit.
+
+```text
+python3 scripts/demonstrate_tongue_bridge.py
+```
