@@ -54,6 +54,11 @@ They cover:
    - malformed existing ledger records reject before append;
    - tampered existing memory record hashes reject before append;
    - oversized serialized memory records reject before append.
+5. Tongue-bridge cases for:
+   - non-intent utterances (`need`, `claim`, `boundary`) acknowledged as
+     `PROPOSAL`-state effects with a `proposal.received` / `proposal.acknowledged`
+     trace and no adapter acknowledgement;
+   - a spoken `intend` line refused — effect intents must arrive as JSON.
 
 Run them with:
 
@@ -113,6 +118,18 @@ Passes if:
 - serialized memory records respect the scoped byte budget;
 - provenance is treated as public evidence metadata, not hidden reasoning;
 - local filesystem side effects occur only under a temp sandbox.
+
+### Tongue bridge
+
+Passes if:
+
+- a non-intent utterance is acknowledged as a `PROPOSAL`-state effect that
+  validates against the canonical JSON Schema and carries neither adapter
+  acknowledgement nor verification (a speech act is recorded, never committed);
+- the acknowledged trace contains `proposal.received` and `proposal.acknowledged`,
+  with a legible detail (a boundary's offer, a need's capability and target);
+- a spoken `intend` line raises `TongueBridgeError` rather than fabricating an
+  intent — effects are governed through the JSON intent path only.
 
 ## Reader Taste Rubric
 

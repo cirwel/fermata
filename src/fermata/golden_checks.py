@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fermata.self_tests import run_self_tests
+from fermata.tongue_bridge import TongueBridgeError, propose_from_utterance
 from fermata.tongue_parser import parse_line
 from fermata.tongue_renderer import render_record
 
@@ -269,6 +270,47 @@ def check_trace_ledger(
     return passed
 
 
+def check_tongue_bridge(
+    golden: dict[str, Any],
+    validator: Draft202012Validator,
+) -> list[str]:
+    """Run tongue-bridge golden cases.
+
+    Each case either acknowledges a non-intent utterance as a PROPOSAL-state
+    effect (validated against the schema) or expects a ``TongueBridgeError``
+    (e.g. an ``intend`` line, which must arrive as JSON).
+    """
+
+    passed = []
+    for case in golden.get("tongue_bridge", []):
+        name = case["input"]
+        if case.get("expect_error"):
+            try:
+                propose_from_utterance(case["input"])
+            except TongueBridgeError:
+                passed.append(name)
+                continue
+            raise AssertionError(
+                f"tongue bridge must reject utterance: {name!r}"
+            )
+        result, trace = propose_from_utterance(case["input"])
+        effect_record = result.to_record()
+        trace_record = trace.to_record()
+        validate_record(validator, f"tongue_bridge:{name}", effect_record)
+        validate_record(validator, f"tongue_bridge_trace:{name}", trace_record)
+        assert effect_record["state"] == case["expected_state"]
+        assert effect_record.get("acknowledgement") is None, (
+            "an acknowledged speech act must not carry adapter acknowledgement"
+        )
+        event_types = [event["type"] for event in trace.events]
+        for expected in case.get("expected_trace_contains", []):
+            assert expected in event_types, (
+                f"{expected!r} not in trace events: {event_types!r}"
+            )
+        passed.append(name)
+    return passed
+
+
 def check_surfaces(
     validator: Draft202012Validator,
     results: dict[str, Any],
@@ -344,6 +386,7 @@ def run_golden_checks(
         "interpreter": check_interpreter(golden, adapter_results),
         "cli": check_cli(golden, adapter_results),
         "trace_ledger": check_trace_ledger(golden, adapter_results),
+        "tongue_bridge": check_tongue_bridge(golden, validator),
         "surfaces": check_surfaces(validator, adapter_results),
     }
 

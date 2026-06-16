@@ -371,5 +371,26 @@
       "name": "trace_ledger_append_verified",
       "expected_status": "verified"
     }
+  ],
+  "tongue_bridge": [
+    {
+      "input": "need file.read target:\"docs/charter.md\" because:\"verify before editing\"",
+      "expected_state": "proposal",
+      "expected_trace_contains": ["proposal.received", "proposal.acknowledged"]
+    },
+    {
+      "input": "claim \"effect creation is not effect execution\" evidence:[state_machine]",
+      "expected_state": "proposal",
+      "expected_trace_contains": ["proposal.received", "proposal.acknowledged"]
+    },
+    {
+      "input": "boundary cannot commit effect:file.write reason:approval_missing offer:dry_run",
+      "expected_state": "proposal",
+      "expected_trace_contains": ["proposal.received", "proposal.acknowledged"]
+    },
+    {
+      "input": "intend file.write target:\"note.txt\"",
+      "expect_error": true
+    }
   ]
 }
