@@ -56,6 +56,8 @@ The validator currently covers:
   `run` commits with adapter acknowledgement and verification;
 - run-bundle contract fixtures for `file.write` and `memory.write` paused,
   rejected, and committed outcomes;
+- package-level runtime API checks for `interpret` and `run`, including paused,
+  rejected, and committed outcomes without shelling out;
 - `git diff --check`.
 
 ## Release-Ready Conditions
@@ -93,5 +95,6 @@ Passing local alpha validation does not imply:
 - trace records are cryptographically sealed;
 - Fermata is a general-purpose programming language.
 
-It means the checked-in local runtime, JSON records, CLI path, golden checks, and
-validation command are coherent enough for local alpha review.
+It means the checked-in local runtime, JSON records, CLI path, runtime API,
+golden checks, and validation command are coherent enough for local alpha
+review.
