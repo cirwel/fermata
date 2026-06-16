@@ -73,6 +73,14 @@ class RejectionReason(str, Enum):
     APPROVAL_INTENT_HASH_MISMATCH = "approval_intent_hash_mismatch"
     APPROVAL_NOT_DECIDED = "approval_not_decided"
     APPROVAL_UNBOUND = "approval_unbound"
+    NETWORK_URL_INVALID = "network_url_invalid"
+    NETWORK_SCHEME_UNSUPPORTED = "network_scheme_unsupported"
+    NETWORK_URL_NOT_IN_ALLOWLIST = "network_url_not_in_allowlist"
+    NETWORK_HOST_IS_PRIVATE = "network_host_is_private"
+    NETWORK_METHOD_NOT_ALLOWED = "network_method_not_allowed"
+    NETWORK_REDIRECT_NOT_ALLOWED = "network_redirect_not_allowed"
+    NETWORK_RESPONSE_TOO_LARGE = "network_response_too_large"
+    NETWORK_REQUEST_FAILED = "network_request_failed"
 
 
 SpeechAct = Literal["need", "claim", "doubt", "intend", "remember", "boundary"]
@@ -87,6 +95,13 @@ class Scope:
     capabilities: frozenset[str]
     approval_required_for: frozenset[str] = field(default_factory=frozenset)
     max_bytes: int = 4096
+    # URL prefixes the network.fetch adapter may reach. Empty means no network
+    # effect is authorized. A tuple (not list) so Scope stays hashable/frozen.
+    network_allow: tuple[str, ...] = ()
+    # Whether network.fetch may reach private / loopback / link-local
+    # addresses. Default deny (SSRF guard); operators opt in for governing
+    # fetches to local services.
+    allow_private_network: bool = False
 
 
 @dataclass(frozen=True)

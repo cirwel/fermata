@@ -6,6 +6,7 @@ import uuid
 
 from fermata.file_adapter import evaluate_file_write
 from fermata.memory_adapter import evaluate_memory_write
+from fermata.network_adapter import evaluate_network_fetch
 from fermata.runtime_core import reject
 from fermata.runtime_ir import (
     ApprovalDecision,
@@ -71,6 +72,14 @@ def interpret(
         )
     if intent.adapter == "memory" and intent.operation == "write":
         return evaluate_memory_write(
+            scope,
+            proposal,
+            approval_granted=approval_granted,
+            approval=approval,
+            _stop_at_approval=True,
+        )
+    if intent.adapter == "network" and intent.operation == "fetch":
+        return evaluate_network_fetch(
             scope,
             proposal,
             approval_granted=approval_granted,
