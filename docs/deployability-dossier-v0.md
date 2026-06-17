@@ -25,6 +25,13 @@ Current `main` is intentionally ahead of that tag. The post-tag validation fix
 and packaged-reference fix for installed golden checks were landed as forward
 fixes after publication, without retargeting or recreating `v0.1.0`.
 
+A `v0.1.1` patch release candidate is now prepared (package version `0.1.1`).
+The release-evidence checkers are version-aware (they read the version from
+`pyproject.toml`), and the release-candidate record supports a documented
+pre-merge `pending_ci` state so a version bump stays honestly green in CI
+before a merged, CI-green release commit exists. No `v0.1.1` tag has been
+created or pushed.
+
 ## 1. Deployable Means
 
 A first deployable Fermata release should be installable, runnable, inspectable,
@@ -268,3 +275,11 @@ release candidate that includes the post-tag validation and packaged-reference
 fixes now on `main`. The alternative is to leave `v0.1.0` as the historical
 first local alpha and continue with the next deployability slice before tagging
 again.
+
+The conservative path is now in progress: a `v0.1.1` patch release candidate is
+prepared with version-aware release checkers and a pre-merge `pending_ci`
+candidate record. The remaining steps before a `v0.1.1` tag are mechanical and
+maintainer-gated: merge the bump to `main` with green CI, upgrade the candidate
+record from `pending_ci` to `pre_tag_candidate` with the merged commit and its
+CI run URLs, then obtain explicit maintainer approval. No tag effect has
+occurred.
