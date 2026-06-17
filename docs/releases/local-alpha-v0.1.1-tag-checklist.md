@@ -23,7 +23,7 @@ occurs, then mark it historical.
 - Release-candidate record: `references/release-candidates-v0/local-alpha-v0.1.1-rc1.json`
 - Tag approval packet: `references/release-approvals-v0/local-alpha-v0.1.1-tag-approval-packet.json`
 - Tag publication preflight: `python3 scripts/check_local_alpha_tag_publication_preflight.py --approval-reference <approval-reference>`
-- Release commit: `<fill-with-merged-main-commit-before-tagging>`
+- Release commit: `71ec78ca39291dd7cc4a923703ba880cb668cbb4` (PR #45 merge on `main`)
 
 ## Required Checks
 

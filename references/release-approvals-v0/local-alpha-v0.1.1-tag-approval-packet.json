@@ -11,7 +11,9 @@
   "release_commit_requirement": {
     "branch": "main",
     "must_equal_remote_ref": "origin/main",
-    "release_commit_placeholder": "<fill-with-merged-main-commit-before-tagging>"
+    "release_commit": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+    "release_commit_source": "https://github.com/cirwel/fermata/pull/45",
+    "note": "The release commit must still be the tip of main and equal origin/main at tag time; re-verify before tagging."
   },
   "requested_effect": {
     "effect_kind": "source_control.tag",

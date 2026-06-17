@@ -134,15 +134,45 @@ def check_release_commit_requirement(
         requirement.get("must_equal_remote_ref") == "origin/main",
         "release_commit_requirement.remote",
     )
-    require(
-        requirement.get("release_commit_placeholder")
-        == "<fill-with-merged-main-commit-before-tagging>",
-        "release_commit_requirement.placeholder",
-    )
+
+    # The release commit is unknown before the version bump merges, so the
+    # packet carries a placeholder pre-merge and a real, HEAD-reachable release
+    # commit once it is known. Accept either, but never both unset.
+    placeholder = requirement.get("release_commit_placeholder")
+    release_commit = requirement.get("release_commit")
+    release_commit_available = None
+    release_commit_is_ancestor = None
+    if release_commit is not None:
+        release_commit = require_string(
+            release_commit, "release_commit_requirement.release_commit"
+        )
+        require(
+            COMMIT_RE.match(release_commit) is not None,
+            "release_commit_requirement.release_commit.format",
+        )
+        release_commit_available = git_succeeds(
+            root, ["cat-file", "-e", f"{release_commit}^{{commit}}"]
+        )
+        if release_commit_available:
+            release_commit_is_ancestor = git_succeeds(
+                root, ["merge-base", "--is-ancestor", release_commit, "HEAD"]
+            )
+            require(
+                release_commit_is_ancestor,
+                "release_commit_requirement.release_commit.ancestor",
+            )
+    else:
+        require(
+            placeholder == "<fill-with-merged-main-commit-before-tagging>",
+            "release_commit_requirement.placeholder",
+        )
     return {
         "available_in_checkout": commit_available,
         "is_ancestor_of_head": commit_is_ancestor,
         "prepared_from_commit": prepared_from,
+        "release_commit": release_commit,
+        "release_commit_available_in_checkout": release_commit_available,
+        "release_commit_is_ancestor_of_head": release_commit_is_ancestor,
     }
 
 
