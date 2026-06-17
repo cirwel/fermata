@@ -2,16 +2,17 @@
 
 **Created:** June 17, 2026
 **Last Updated:** June 17, 2026
-**Status:** Release candidate
+**Status:** Published prerelease
 
 ---
 
 > **Agents may propose; only governed effects may commit.**
 
-These notes are the local-alpha release packet for Fermata package version
-`0.1.1`. This is a **release candidate**: no source-control tag has been
-created or pushed, and these notes are not maintainer approval. The tag is a
-separate governed effect that must wait for explicit approval.
+These notes began as the local-alpha release packet for Fermata package version
+`0.1.1`. The governed publication effect has now occurred: `v0.1.1` is a
+published GitHub prerelease. The source-control tag remains a separate governed
+effect from the release notes, and it was created and pushed only after explicit
+maintainer approval.
 
 `v0.1.1` is a patch release. It folds the forward fixes already on `main` since
 `v0.1.0` into a coherent, installable package and makes the release-evidence
@@ -20,7 +21,9 @@ machinery version-aware.
 ## Release Identity
 
 - Package version: `0.1.1`
-- Intended tag: `v0.1.1`
+- Published tag: `v0.1.1`
+- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.1>
+- Tag target: `40db0525d8b0d321fd1ed24c25180e559ef18ca8`
 - Predecessor: `v0.1.0` (<https://github.com/cirwel/fermata/releases/tag/v0.1.0>)
 - Required validator: `python3 scripts/validate_local_alpha.py`
 - Release-candidate dry run: `python3 scripts/check_local_alpha_release_candidate.py`
@@ -52,18 +55,24 @@ hardens the release process itself:
   claims no commit or CI evidence it cannot yet have, and names the exact
   requirements to fill before it becomes a `pre_tag_candidate`.
 
-## Candidate State
+## Post-Publication Notes
 
-This packet is a release candidate. Status of the remaining gates:
+The governed publication path completed in order:
 
 - the version bump merged to `main` in PR #45 as commit
   `71ec78ca39291dd7cc4a923703ba880cb668cbb4` with green `ci / golden`;
 - the release-candidate record at
-  `references/release-candidates-v0/local-alpha-v0.1.1-rc1.json` is upgraded to
-  `pre_tag_candidate` with the merged commit, two green `ci / golden` run URLs,
-  and a strict release-candidate dry-run snapshot;
-- the maintainer tag approval packet remains `not_granted`: explicit maintainer
-  approval is still required before the `v0.1.1` tag is created or pushed.
+  `references/release-candidates-v0/local-alpha-v0.1.1-rc1.json` was upgraded to
+  `pre_tag_candidate` (PR #46) with the merged commit, two green `ci / golden`
+  run URLs, and a strict release-candidate dry-run snapshot;
+- the tree was made clean for the strict publication preflight by ignoring
+  local `.unitares/` governance scratch, landing the release tip at
+  `40db0525d8b0d321fd1ed24c25180e559ef18ca8` on `main`;
+- after explicit maintainer approval, the annotated `v0.1.1` tag was created and
+  pushed, then published as a GitHub prerelease.
+
+The published `v0.1.1` tag is intentionally unchanged. Any further fixes land as
+forward commits on `main`, not by retargeting the tag.
 
 ## What This Local Alpha Includes
 
@@ -85,9 +94,9 @@ This packet is a release candidate. Status of the remaining gates:
   reference data, and console entry points;
 - one local-alpha validator command that runs the complete checked gate.
 
-## Required Evidence Before Tagging
+## Historical Required Evidence Before Tagging
 
-Before `v0.1.1` is created or pushed, the required evidence is:
+Before `v0.1.1` was created or pushed, the required evidence was:
 
 - `python3 scripts/validate_local_alpha.py` returns top-level
   `"status": "passed"`;
