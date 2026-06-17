@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1",
+  "record_type": "release_candidate",
+  "candidate_id": "local-alpha-v0.1.1-rc1",
+  "package_version": "0.1.1",
+  "intended_tag": "v0.1.1",
+  "status": "pending_ci",
+  "candidate_commit": "<fill-with-merged-main-commit-after-ci>",
+  "candidate_branch": "claude/fermat-progress-9s2n44",
+  "created_at": "2026-06-17T15:10:00Z",
+  "pending_ci": {
+    "ci_status": "pending",
+    "reason": "The v0.1.1 version bump is not yet merged to main, so no green ci/golden run exists for a v0.1.1 release commit. This record claims no commit or CI evidence it cannot yet have.",
+    "dry_run_command": "python3 scripts/check_local_alpha_release_candidate.py --allow-current-branch",
+    "required_before_pre_tag": [
+      "Merge the v0.1.1 version bump to main with green ci/golden.",
+      "Set candidate_commit to the merged main commit SHA.",
+      "Add candidate_commit_source with the merging pull request and merged_at.",
+      "Add at least two green ci/golden run URLs for the candidate commit under ci_evidence.",
+      "Record a strict release-candidate dry-run snapshot under dry_run_evidence (python3 scripts/check_local_alpha_release_candidate.py from clean main matching origin/main).",
+      "Flip status from pending_ci to pre_tag_candidate."
+    ]
+  },
+  "ci_evidence": [],
+  "publication_effects": {
+    "created_tag": false,
+    "pushed_tag": false,
+    "tag_name": "v0.1.1"
+  },
+  "non_claims": [
+    "No source-control tag has been created.",
+    "No source-control tag has been pushed.",
+    "This record is pre-tag evidence, not publication approval.",
+    "This record does not claim hosted production readiness.",
+    "This record does not claim remote adapter safety."
+  ],
+  "next_required_effect": "Merge the v0.1.1 bump to main with green CI, upgrade this record to pre_tag_candidate, then obtain maintainer approval before creating or pushing v0.1.1."
+}
