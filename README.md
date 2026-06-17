@@ -60,6 +60,12 @@ tag with forward fixes for post-tag validation and installed golden-check
 reference data. Install from current `main` or a later release when you need the
 installed `fermata-golden-checks` command to run outside a source checkout.
 
+A `v0.1.1` patch release candidate is now prepared (package version `0.1.1`),
+folding those forward fixes into a coherent packet. The release-evidence
+checkers are version-aware and the candidate record carries a documented
+pre-merge `pending_ci` state; no `v0.1.1` tag has been created or pushed. See
+[docs/releases/local-alpha-v0.1.1.md](docs/releases/local-alpha-v0.1.1.md).
+
 ## Why "Fermata"?
 
 A fermata is a deliberate hold. The performer does not rush through the note; the

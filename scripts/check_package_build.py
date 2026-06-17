@@ -10,10 +10,20 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import venv
 import zipfile
 from pathlib import Path
 from typing import Any
+
+
+def pyproject_version(root: Path) -> str:
+    """Return the package version declared in pyproject.toml."""
+
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = data.get("project", {}).get("version")
+    assert isinstance(version, str), "pyproject.version"
+    return version
 
 
 EXPECTED_CONSOLE_SCRIPTS = {
@@ -37,13 +47,17 @@ EXPECTED_SDIST_FILES = {
     "docs/recovery-evidence-v0.md",
     "docs/releases/local-alpha-v0.1.0-tag-checklist.md",
     "docs/releases/local-alpha-v0.1.0.md",
+    "docs/releases/local-alpha-v0.1.1-tag-checklist.md",
+    "docs/releases/local-alpha-v0.1.1.md",
     "docs/runtime-api-v0.md",
     "examples/local-alpha/file-scope.json",
     "references/recovery-evidence-examples-v0/local-service-run-packet-v0.json",
     "references/recovery-evidence-templates-v0/service-incident-report-template.json",
     "references/recovery-evidence-templates-v0/service-reconciliation-report-template.json",
     "references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json",
+    "references/release-approvals-v0/local-alpha-v0.1.1-tag-approval-packet.json",
     "references/release-candidates-v0/local-alpha-v0.1.0-rc1.json",
+    "references/release-candidates-v0/local-alpha-v0.1.1-rc1.json",
     "references/governed-effect-ir-v0.schema.json",
     "references/tongue-golden-tests-v0.json",
     "scripts/check_local_alpha_release_candidate.py",
@@ -189,8 +203,9 @@ def check_wheel(wheel: Path, source: Path) -> dict[str, Any]:
     assert not unexpected_modules, unexpected_modules
     missing_package_data = sorted(EXPECTED_WHEEL_DATA - names)
     assert not missing_package_data, missing_package_data
+    version = pyproject_version(source)
     assert "Name: fermata-runtime" in metadata
-    assert "Version: 0.1.0" in metadata
+    assert f"Version: {version}" in metadata
 
     entry_points = read_wheel_entry_points(wheel)
     missing_entry_points = sorted(EXPECTED_CONSOLE_SCRIPTS - entry_points)
@@ -200,7 +215,7 @@ def check_wheel(wheel: Path, source: Path) -> dict[str, Any]:
         "entry_points": sorted(entry_points),
         "package_data": sorted(EXPECTED_WHEEL_DATA),
         "module_count": len(package_modules),
-        "metadata": {"name": "fermata-runtime", "version": "0.1.0"},
+        "metadata": {"name": "fermata-runtime", "version": version},
     }
 
 

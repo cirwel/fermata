@@ -7,12 +7,11 @@ import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Any
 
 
-RELEASE_TAG = "v0.1.0"
-RELEASE_CANDIDATE = "local-alpha-v0.1.0"
 RELEASE_ARTIFACT_COMMAND = [
     sys.executable,
     "scripts/check_local_alpha_release_artifacts.py",
@@ -24,6 +23,16 @@ def repo_root() -> Path:
     """Return the source checkout root."""
 
     return Path(__file__).resolve().parents[1]
+
+
+def pyproject_version(root: Path) -> str:
+    """Return the package version declared in pyproject.toml."""
+
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = data.get("project", {}).get("version")
+    if not isinstance(version, str):
+        raise AssertionError("pyproject.version")
+    return version
 
 
 def require(condition: bool, label: str) -> None:
@@ -63,10 +72,10 @@ def git_status(root: Path) -> str:
     return git_output(root, ["status", "--porcelain", "--untracked-files=all"])
 
 
-def tag_exists(root: Path) -> bool:
+def tag_exists(root: Path, tag: str) -> bool:
     """Return whether the release tag exists in the current repository."""
 
-    return bool(git_output(root, ["tag", "--list", RELEASE_TAG]))
+    return bool(git_output(root, ["tag", "--list", tag]))
 
 
 def parse_json_stdout(result: subprocess.CompletedProcess[str], *, label: str) -> dict[str, Any]:
@@ -81,17 +90,19 @@ def parse_json_stdout(result: subprocess.CompletedProcess[str], *, label: str) -
     return data
 
 
-def source_preflight(root: Path, *, allow_current_branch: bool) -> dict[str, Any]:
+def source_preflight(
+    root: Path, *, allow_current_branch: bool, tag: str
+) -> dict[str, Any]:
     """Check source repository state before creating the candidate worktree."""
 
     head = git_output(root, ["rev-parse", "HEAD"])
     branch = git_output(root, ["branch", "--show-current"])
     origin_main = git_output(root, ["rev-parse", "--verify", "origin/main"])
     status = git_status(root)
-    source_tag_exists = tag_exists(root)
+    source_tag_exists = tag_exists(root, tag)
 
     require(not status, f"source_status_dirty:{status}")
-    require(not source_tag_exists, f"source_tag_exists:{RELEASE_TAG}")
+    require(not source_tag_exists, f"source_tag_exists:{tag}")
     if not allow_current_branch:
         require(branch == "main", f"source_branch:{branch}")
         require(head == origin_main, "source_head_not_origin_main")
@@ -124,14 +135,14 @@ def remove_worktree(root: Path, candidate: Path) -> None:
     )
 
 
-def run_candidate_worktree(candidate: Path) -> dict[str, Any]:
+def run_candidate_worktree(candidate: Path, *, tag: str) -> dict[str, Any]:
     """Run release checks inside a detached candidate worktree."""
 
     head = git_output(candidate, ["rev-parse", "HEAD"])
     status_before = git_status(candidate)
-    tag_before = tag_exists(candidate)
+    tag_before = tag_exists(candidate, tag)
     require(not status_before, f"candidate_status_dirty_before:{status_before}")
-    require(not tag_before, f"candidate_tag_exists_before:{RELEASE_TAG}")
+    require(not tag_before, f"candidate_tag_exists_before:{tag}")
 
     release_artifacts = parse_json_stdout(
         run_command(RELEASE_ARTIFACT_COMMAND, cwd=candidate),
@@ -143,9 +154,9 @@ def run_candidate_worktree(candidate: Path) -> dict[str, Any]:
     )
 
     status_after = git_status(candidate)
-    tag_after = tag_exists(candidate)
+    tag_after = tag_exists(candidate, tag)
     require(not status_after, f"candidate_status_dirty_after:{status_after}")
-    require(not tag_after, f"candidate_tag_exists_after:{RELEASE_TAG}")
+    require(not tag_after, f"candidate_tag_exists_after:{tag}")
 
     return {
         "head": head,
@@ -169,17 +180,22 @@ def run_dry_run(*, root: Path | None = None, allow_current_branch: bool = False)
     """Run the full release-candidate dry run and return JSON-safe evidence."""
 
     source_root = root or repo_root()
-    source = source_preflight(source_root, allow_current_branch=allow_current_branch)
+    version = pyproject_version(source_root)
+    tag = f"v{version}"
+    release_candidate = f"local-alpha-v{version}"
+    source = source_preflight(
+        source_root, allow_current_branch=allow_current_branch, tag=tag
+    )
     with tempfile.TemporaryDirectory(prefix="fermata_release_candidate_") as tmp:
         candidate = Path(tmp) / "candidate"
         add_detached_worktree(source_root, candidate, source["head"])
         try:
-            candidate_result = run_candidate_worktree(candidate)
+            candidate_result = run_candidate_worktree(candidate, tag=tag)
         finally:
             remove_worktree(source_root, candidate)
 
-    source_tag_after = tag_exists(source_root)
-    require(not source_tag_after, f"source_tag_exists_after:{RELEASE_TAG}")
+    source_tag_after = tag_exists(source_root, tag)
+    require(not source_tag_after, f"source_tag_exists_after:{tag}")
     return {
         "checks": {
             "candidate_worktree": candidate_result,
@@ -188,7 +204,7 @@ def run_dry_run(*, root: Path | None = None, allow_current_branch: bool = False)
                 "release_tag_exists_after": source_tag_after,
             },
         },
-        "release_candidate": RELEASE_CANDIDATE,
+        "release_candidate": release_candidate,
         "status": "passed",
     }
 
@@ -219,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "error": str(exc),
-                    "release_candidate": RELEASE_CANDIDATE,
+                    "release_candidate": "local-alpha",
                     "status": "failed",
                 },
                 indent=2,

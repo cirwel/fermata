@@ -6,15 +6,33 @@ import argparse
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
 
-PREFLIGHT_ID = "local-alpha-v0.1.0-tag-publication-preflight"
-RELEASE_TAG = "v0.1.0"
+def repo_root() -> Path:
+    """Return the source checkout root."""
+
+    return Path(__file__).resolve().parents[1]
+
+
+def pyproject_version(root: Path) -> str:
+    """Return the package version declared in pyproject.toml."""
+
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = data.get("project", {}).get("version")
+    if not isinstance(version, str):
+        raise AssertionError("pyproject.version")
+    return version
+
+
+_VERSION = pyproject_version(repo_root())
+PREFLIGHT_ID = f"local-alpha-v{_VERSION}-tag-publication-preflight"
+RELEASE_TAG = f"v{_VERSION}"
 TAG_COMMANDS = [
-    'git tag -a v0.1.0 -m "Fermata local alpha v0.1.0"',
-    "git push origin v0.1.0",
+    f'git tag -a {RELEASE_TAG} -m "Fermata local alpha {RELEASE_TAG}"',
+    f"git push origin {RELEASE_TAG}",
 ]
 INVALID_APPROVAL_REFERENCES = {
     "",
@@ -23,12 +41,6 @@ INVALID_APPROVAL_REFERENCES = {
     "not_granted",
     "pending",
 }
-
-
-def repo_root() -> Path:
-    """Return the source checkout root."""
-
-    return Path(__file__).resolve().parents[1]
 
 
 def require(condition: bool, label: str) -> None:

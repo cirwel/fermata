@@ -5,29 +5,49 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
 
-PACKET_ID = "local-alpha-v0.1.0-tag-approval-packet"
+def repo_root() -> Path:
+    """Return the source checkout root."""
+
+    return Path(__file__).resolve().parents[1]
+
+
+def pyproject_version(root: Path) -> str:
+    """Return the package version declared in pyproject.toml."""
+
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = data.get("project", {}).get("version")
+    if not isinstance(version, str):
+        raise AssertionError("pyproject.version")
+    return version
+
+
+_VERSION = pyproject_version(repo_root())
+PACKAGE_VERSION = _VERSION
+INTENDED_TAG = f"v{_VERSION}"
+PACKET_ID = f"local-alpha-v{_VERSION}-tag-approval-packet"
 PACKET_RECORD = Path(
-    "references/release-approvals-v0/local-alpha-v0.1.0-tag-approval-packet.json"
+    "references/release-approvals-v0/"
+    f"local-alpha-v{_VERSION}-tag-approval-packet.json"
 )
-PACKAGE_VERSION = "0.1.0"
-INTENDED_TAG = "v0.1.0"
-RELEASE_NOTES = Path("docs/releases/local-alpha-v0.1.0.md")
-TAG_CHECKLIST = Path("docs/releases/local-alpha-v0.1.0-tag-checklist.md")
+RELEASE_NOTES = Path(f"docs/releases/local-alpha-v{_VERSION}.md")
+TAG_CHECKLIST = Path(f"docs/releases/local-alpha-v{_VERSION}-tag-checklist.md")
 RELEASE_CANDIDATE_RECORD = Path(
-    "references/release-candidates-v0/local-alpha-v0.1.0-rc1.json"
+    f"references/release-candidates-v0/local-alpha-v{_VERSION}-rc1.json"
 )
+TAG_MESSAGE = f"Fermata local alpha {INTENDED_TAG}"
 TAG_COMMANDS = [
-    'git tag -a v0.1.0 -m "Fermata local alpha v0.1.0"',
-    "git push origin v0.1.0",
+    f'git tag -a {INTENDED_TAG} -m "{TAG_MESSAGE}"',
+    f"git push origin {INTENDED_TAG}",
 ]
 REQUIRED_LAST_MINUTE_COMMANDS = [
     "git status --short --branch",
     "git rev-parse HEAD origin/main",
-    "git tag --list v0.1.0",
+    f"git tag --list {INTENDED_TAG}",
     "python3 scripts/check_local_alpha_release_artifacts.py",
     "python3 scripts/check_local_alpha_release_candidate.py",
     "python3 scripts/check_local_alpha_release_candidate_record.py",
@@ -40,12 +60,6 @@ REQUIRED_MANUAL_RECHECKS = [
     "Confirm maintainer approval reference is present before running tag commands.",
 ]
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
-
-
-def repo_root() -> Path:
-    """Return the source checkout root."""
-
-    return Path(__file__).resolve().parents[1]
 
 
 def require(condition: bool, label: str) -> None:
@@ -145,7 +159,7 @@ def check_requested_effect(record: dict[str, Any], root: Path) -> dict[str, str]
     require(effect.get("tag_name") == INTENDED_TAG, "requested_effect.tag_name")
     require(effect.get("target_remote") == "origin", "requested_effect.remote")
     require(
-        effect.get("tag_message") == "Fermata local alpha v0.1.0",
+        effect.get("tag_message") == TAG_MESSAGE,
         "requested_effect.tag_message",
     )
 
@@ -239,7 +253,10 @@ def check_non_claims(record: dict[str, Any]) -> list[str]:
     require(not missing, f"non_claims.missing:{missing}")
     require(
         record.get("next_required_effect")
-        == "Explicit maintainer approval is required before creating or pushing v0.1.0.",
+        == (
+            "Explicit maintainer approval is required before creating or "
+            f"pushing {INTENDED_TAG}."
+        ),
         "next_required_effect",
     )
     return non_claims
@@ -255,7 +272,10 @@ def check_roll_forward_rule(record: dict[str, Any]) -> dict[str, str]:
         "rollback_roll_forward_rule.local",
     )
     pushed = require_string(rule.get("tag_pushed"), "rollback_roll_forward_rule.pushed")
-    require("git tag -d v0.1.0" in local, "rollback_roll_forward_rule.local.delete")
+    require(
+        f"git tag -d {INTENDED_TAG}" in local,
+        "rollback_roll_forward_rule.local.delete",
+    )
     require("Do not retarget or delete the pushed tag" in pushed, "rollback_rule.pushed")
     require("explicit maintainer decision record" in pushed, "rollback_rule.decision")
     return {
