@@ -54,16 +54,16 @@ hardens the release process itself:
 
 ## Candidate State
 
-This packet is a release candidate. Before the `v0.1.1` tag effect:
+This packet is a release candidate. Status of the remaining gates:
 
+- the version bump merged to `main` in PR #45 as commit
+  `71ec78ca39291dd7cc4a923703ba880cb668cbb4` with green `ci / golden`;
 - the release-candidate record at
-  `references/release-candidates-v0/local-alpha-v0.1.1-rc1.json` is in the
-  `pending_ci` state until the version bump merges to `main` with green
-  `ci / golden`;
-- after merge, the record is upgraded to `pre_tag_candidate` with the merged
-  commit, at least two green CI run URLs for that commit, and a strict
-  release-candidate dry-run snapshot;
-- the maintainer tag approval packet remains `not_granted`.
+  `references/release-candidates-v0/local-alpha-v0.1.1-rc1.json` is upgraded to
+  `pre_tag_candidate` with the merged commit, two green `ci / golden` run URLs,
+  and a strict release-candidate dry-run snapshot;
+- the maintainer tag approval packet remains `not_granted`: explicit maintainer
+  approval is still required before the `v0.1.1` tag is created or pushed.
 
 ## What This Local Alpha Includes
 

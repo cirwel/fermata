@@ -4,28 +4,108 @@
   "candidate_id": "local-alpha-v0.1.1-rc1",
   "package_version": "0.1.1",
   "intended_tag": "v0.1.1",
-  "status": "pending_ci",
-  "candidate_commit": "<fill-with-merged-main-commit-after-ci>",
-  "candidate_branch": "claude/fermat-progress-9s2n44",
-  "created_at": "2026-06-17T15:10:00Z",
-  "pending_ci": {
-    "ci_status": "pending",
-    "reason": "The v0.1.1 version bump is not yet merged to main, so no green ci/golden run exists for a v0.1.1 release commit. This record claims no commit or CI evidence it cannot yet have.",
-    "dry_run_command": "python3 scripts/check_local_alpha_release_candidate.py --allow-current-branch",
-    "required_before_pre_tag": [
-      "Merge the v0.1.1 version bump to main with green ci/golden.",
-      "Set candidate_commit to the merged main commit SHA.",
-      "Add candidate_commit_source with the merging pull request and merged_at.",
-      "Add at least two green ci/golden run URLs for the candidate commit under ci_evidence.",
-      "Record a strict release-candidate dry-run snapshot under dry_run_evidence (python3 scripts/check_local_alpha_release_candidate.py from clean main matching origin/main).",
-      "Flip status from pending_ci to pre_tag_candidate."
-    ]
+  "status": "pre_tag_candidate",
+  "candidate_commit": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+  "candidate_branch": "main",
+  "candidate_commit_source": {
+    "pull_request": "https://github.com/cirwel/fermata/pull/45",
+    "merged_at": "2026-06-17T15:44:08Z",
+    "description": "main after the v0.1.1 version bump merged (PR #45). The merge commit tree is identical to the pre-merge branch tip 036cb6e6973e267bb5635fc68187bc671ae4578c, which was the change merged into an un-advanced main."
   },
-  "ci_evidence": [],
+  "created_at": "2026-06-17T15:50:00Z",
   "publication_effects": {
     "created_tag": false,
     "pushed_tag": false,
     "tag_name": "v0.1.1"
+  },
+  "ci_evidence": [
+    {
+      "workflow": "ci",
+      "check": "golden",
+      "conclusion": "SUCCESS",
+      "commit": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+      "event": "push",
+      "started_at": "2026-06-17T15:44:19Z",
+      "completed_at": "2026-06-17T15:44:43Z",
+      "url": "https://github.com/cirwel/fermata/actions/runs/27701327800/job/81938233176",
+      "description": "post-merge ci/golden on the release commit on main"
+    },
+    {
+      "workflow": "ci",
+      "check": "golden",
+      "conclusion": "SUCCESS",
+      "commit": "036cb6e6973e267bb5635fc68187bc671ae4578c",
+      "event": "push",
+      "started_at": "2026-06-17T15:37:41Z",
+      "completed_at": "2026-06-17T15:38:01Z",
+      "url": "https://github.com/cirwel/fermata/actions/runs/27700915271/job/81936753422",
+      "description": "pre-merge ci/golden on the PR #45 branch tip, whose tree is identical to the merge commit"
+    }
+  ],
+  "dry_run_evidence": {
+    "command": "python3 scripts/check_local_alpha_release_candidate.py",
+    "status": "passed",
+    "source": {
+      "allow_current_branch": false,
+      "branch": "main",
+      "head": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+      "origin_main": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+      "release_tag_exists_before": false,
+      "release_tag_exists_after": false,
+      "status_clean": true
+    },
+    "candidate_worktree": {
+      "head": "71ec78ca39291dd7cc4a923703ba880cb668cbb4",
+      "status_clean_before": true,
+      "status_clean_after": true,
+      "release_tag_exists_before": false,
+      "release_tag_exists_after": false,
+      "release_artifacts": {
+        "release_artifacts": "local-alpha-v0.1.1",
+        "status": "passed"
+      },
+      "validator": {
+        "status": "passed",
+        "checked": [
+          "compileall",
+          "schema_json",
+          "golden_json",
+          "golden_checks",
+          "cli_smoke",
+          "run_bundle_contract",
+          "approval_surface",
+          "runtime_api",
+          "local_service",
+          "recovery_evidence",
+          "recovery_evidence_example",
+          "release_artifacts",
+          "release_candidate_record",
+          "tag_approval_packet",
+          "tag_publication_preflight",
+          "package_build",
+          "diff_check"
+        ],
+        "passed": [
+          "compileall",
+          "schema_json",
+          "golden_json",
+          "golden_checks",
+          "cli_smoke",
+          "run_bundle_contract",
+          "approval_surface",
+          "runtime_api",
+          "local_service",
+          "recovery_evidence",
+          "recovery_evidence_example",
+          "release_artifacts",
+          "release_candidate_record",
+          "tag_approval_packet",
+          "tag_publication_preflight",
+          "package_build",
+          "diff_check"
+        ]
+      }
+    }
   },
   "non_claims": [
     "No source-control tag has been created.",
@@ -34,5 +114,5 @@
     "This record does not claim hosted production readiness.",
     "This record does not claim remote adapter safety."
   ],
-  "next_required_effect": "Merge the v0.1.1 bump to main with green CI, upgrade this record to pre_tag_candidate, then obtain maintainer approval before creating or pushing v0.1.1."
+  "next_required_effect": "Explicit maintainer approval is required before creating or pushing v0.1.1."
 }
