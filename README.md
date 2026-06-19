@@ -34,10 +34,12 @@ The third proof is a governed network fetch — the pattern reaching past the
 local disk. An agent proposes `network.fetch` with a URL; the runtime checks the
 URL against a scope allowlist (structural match: scheme + exact host + effective
 port + path prefix, never substring), refuses private/loopback targets unless the scope
-opts in, fetches only `http`/`https` with `GET` under a hard timeout, follows no
-redirects, caps the body at the scope byte budget, persists the response to a
-scoped sandbox file, and verifies by reading those bytes back and comparing
-SHA-256. Same admit → approve → commit → verify contract, now over the network.
+opts in — pinning the connection to the exact validated IP so DNS cannot rebind
+to a private target between the check and the connect — fetches only
+`http`/`https` with `GET` under a hard timeout, follows no redirects, caps the
+body at the scope byte budget, optionally enforces a response content-type
+contract, persists the response to a scoped sandbox file, and verifies by reading
+those bytes back and comparing SHA-256. Same admit → approve → commit → verify contract, now over the network.
 
 Across all three, commits are **retry-safe**: an intent may carry an
 `idempotency_key`, and the runtime commits the effect at most once per
@@ -45,6 +47,13 @@ Across all three, commits are **retry-safe**: an intent may carry an
 returns the prior committed result instead of re-running the adapter, and the
 same key with a different intent is rejected as a conflict. An orchestrator can
 retry a governed proposal without fear of double-applying the effect.
+
+A scope may also carry a **rolling-window rate budget**
+(`max_effects_per_window` over `rate_window_seconds`): the runtime commits at
+most that many governed effects per scope within any trailing window — across
+file, memory, and network alike — and refuses the next one as
+`scope_rate_limit_exceeded`. A scope's cumulative external reach is bounded, not
+just each individual effect.
 
 ## Current Release State
 

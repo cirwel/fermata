@@ -61,8 +61,12 @@ The current repo proves a smaller but real core:
 
 - canonical JSON Schema records for scopes, proposals, effects, and traces;
 - public speech parsing and rendering for the v0 tongue;
-- file-write and memory-write adapters with denial, pause, approval, commit,
-  acknowledgement, verification, and trace tests;
+- file-write, memory-write, and network-fetch adapters with denial, pause,
+  approval, commit, acknowledgement, verification, and trace tests;
+- cross-cutting governed-effect controls with tests: at-most-once idempotent
+  commits per (scope, key); a per-scope rolling-window rate budget across all
+  effects; and, for network fetch, structural URL allowlisting, resolved-IP
+  pinning against DNS rebinding, and a response content-type contract;
 - authority-policy and agent-proposal surfaces that lower into the same IR;
 - schema, corpus, parser, renderer, adapter, interpreter, trace-ledger, and
   surface checks in `scripts/run_tongue_golden_tests.py`;
