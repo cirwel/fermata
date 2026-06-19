@@ -30,6 +30,7 @@ from fermata.network_adapter import (
 from fermata.runtime_core import (
     append_trace_ledger,
     rate_count_recent,
+    rate_store_path,
     trace_ledger_path,
 )
 from fermata.runtime_ir import (
@@ -2110,6 +2111,19 @@ def run_self_tests() -> dict[str, Any]:
             rate_d, _ = evaluate_file_write(rate_scope, _rate_proposal("d"))
             assert rate_d.state == EffectState.COMMITTED, rate_d.rejection_reason
             results["scope_rate_limit_window_recovers"] = {"committed": True}
+
+            # The ledger is pruned to the active window on write, so the three
+            # earlier events (now aged out) are gone — only the t=1200 event
+            # remains. The ledger stays bounded rather than growing forever.
+            rate_ledger_lines = [
+                line
+                for line in rate_store_path(rate_scope)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            assert len(rate_ledger_lines) == 1, rate_ledger_lines
+            results["scope_rate_ledger_pruned"] = {"events": len(rate_ledger_lines)}
 
             # A paused (approval-required) proposal must not consume budget: with
             # a fresh single-slot scope, a pause leaves the slot available.

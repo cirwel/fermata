@@ -244,10 +244,9 @@ def rate_count_recent(scope: Scope, *, now: float, window_seconds: float) -> int
     skipped rather than raised — an approximate undercount is preferable to
     failing an otherwise-permitted effect on a torn historical line.
 
-    Local-alpha limitation: like the idempotency and trace ledgers, this file is
-    append-only and never compacted — aged-out events are skipped on read but
-    not pruned, and the whole ledger is re-read per commit (O(n)). Fine for the
-    single-writer alpha; rotation/pruning is future work.
+    The ledger is pruned to the active window on each write (see ``rate_record``),
+    so it stays bounded to roughly one window of events rather than growing
+    without limit like the idempotency and trace ledgers.
     """
 
     ledger_path = rate_store_path(scope)
@@ -274,10 +273,52 @@ def rate_count_recent(scope: Scope, *, now: float, window_seconds: float) -> int
     return count
 
 
-def rate_record(scope: Scope, record: dict[str, Any]) -> None:
-    """Append one committed-effect timestamp record to the scoped rate ledger."""
+def rate_record(scope: Scope, record: dict[str, Any], *, retain_since: float) -> None:
+    """Record a committed-effect event, pruning events older than the window.
 
-    _append_jsonl_record(scope, rate_store_path(scope), record)
+    Rewrites the scoped rate ledger to the events still at or after
+    ``retain_since`` plus the new ``record``, so the ledger stays bounded to the
+    active window instead of growing forever (events older than the window can
+    never count again). The rewrite is atomic and symlink-safe — it reuses the
+    anchored O_NOFOLLOW temp-write-and-rename primitive and verifies by reading
+    the bytes back. Corrupt historical lines are dropped, not raised.
+
+    A compacting rewrite (rather than a bare append) means a concurrent writer's
+    event can be lost — the same single-writer caveat that already applies to the
+    budget count itself; under concurrency it can only under-count (fail open).
+    """
+
+    ledger_path = rate_store_path(scope)
+    kept: list[dict[str, Any]] = []
+    try:
+        read_fd = os.open(ledger_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        read_fd = None
+    if read_fd is not None:
+        with os.fdopen(read_fd, "r", encoding="utf-8") as ledger_file:
+            text = ledger_file.read()
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                existing = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = existing.get("ts")
+            if isinstance(ts, (int, float)) and ts >= retain_since:
+                kept.append(existing)
+    kept.append(record)
+
+    ensure_private_directory(ledger_path.parent, root=ledger_path.parent.resolve())
+    content = "".join(
+        json.dumps(entry, sort_keys=True) + "\n" for entry in kept
+    ).encode("utf-8")
+
+    def _verify_readback(readback: bytes) -> None:
+        if readback != content:
+            raise ValueError("rate_ledger_read_back_mismatch")
+
+    anchored_atomic_write(scope, ledger_path, content, verify=_verify_readback)
 
 
 def reject(
@@ -742,6 +783,7 @@ def evaluate_with_adapter(
                     "effect_id": committed.effect_id,
                     "committed_at": committed.committed_at,
                 },
+                retain_since=effect_now - scope.rate_window_seconds,
             )
         except (OSError, ValueError) as exc:
             trace.add(
