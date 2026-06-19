@@ -1796,6 +1796,67 @@ def run_self_tests() -> dict[str, Any]:
             assert "adapter.commit.started" not in [
                 event["type"] for event in net_interpret_trace.events
             ]
+
+            # Resolved-IP pinning: the connection is made to the exact IP that
+            # passed the safety check, with no re-resolution before connect.
+            # Inject a resolver that maps a public-looking host to the loopback
+            # fixture; the fetch must connect to that pinned IP (reaching the
+            # fixture) while the allowlist and Host header use the hostname.
+            import ipaddress
+
+            import fermata.network_adapter as net_mod
+
+            real_resolve = net_mod._resolve_addresses
+
+            def _fake_resolve(host, port, _real=real_resolve):
+                if host == "pinned.test":
+                    return [("127.0.0.1", ipaddress.ip_address("127.0.0.1"))]
+                return _real(host, port)
+
+            net_mod._resolve_addresses = _fake_resolve
+            try:
+                pin_scope = sample_network_scope(
+                    net_root,
+                    allow_prefix=f"http://pinned.test:{net_port}/",
+                    approval_required=False,
+                    allow_private_network=True,
+                )
+                pin_committed, _ = evaluate_network_fetch(
+                    pin_scope,
+                    sample_network_proposal(
+                        f"http://pinned.test:{net_port}/data",
+                        target="responses/pin.bin",
+                    ),
+                )
+                assert pin_committed.state == EffectState.COMMITTED, (
+                    pin_committed.rejection_reason
+                )
+                assert (
+                    Path(pin_committed.acknowledgement["target"]).read_bytes()
+                    == fetch_body
+                ), "pinned fetch did not reach the loopback fixture"
+                results["network_fetch_pins_resolved_ip"] = {"committed": True}
+
+                # And a host whose sole resolved address is unsafe is rejected
+                # under pinning even with a public-looking name (no opt-in).
+                rebind_scope = sample_network_scope(
+                    net_root,
+                    allow_prefix=f"http://pinned.test:{net_port}/",
+                    approval_required=False,
+                    allow_private_network=False,
+                )
+                pin_rejected, _ = evaluate_network_fetch(
+                    rebind_scope,
+                    sample_network_proposal(
+                        f"http://pinned.test:{net_port}/data",
+                        target="responses/rebind.bin",
+                    ),
+                )
+                assert pin_rejected.state == EffectState.REJECTED
+                assert pin_rejected.rejection_reason == "network_host_is_private"
+                results["network_pinned_private_rejected"] = {"rejected": True}
+            finally:
+                net_mod._resolve_addresses = real_resolve
         finally:
             server.shutdown()
             net_thread.join(timeout=5)
