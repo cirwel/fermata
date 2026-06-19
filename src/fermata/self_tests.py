@@ -1528,6 +1528,33 @@ def run_self_tests() -> dict[str, Any]:
             "ledger write followed a symlink and corrupted a sibling file"
         )
 
+        # A corrupt historical line (e.g. a torn write from an earlier crash)
+        # must not break verification of a freshly appended trace: the read-back
+        # skips the unparseable line and still confirms the new record. Without
+        # the guard, json.loads on the bad line raises and every future trace
+        # append fails.
+        corrupt_scope = sample_scope(
+            Path(tmp) / "ledger_corrupt_sandbox", approval_required=False
+        )
+        corrupt_target = trace_ledger_path(corrupt_scope)
+        corrupt_target.parent.mkdir(parents=True, exist_ok=True)
+        corrupt_target.write_text(
+            '{"trace_id": "trace_torn", "events": [  \n', encoding="utf-8"
+        )
+        corrupt_evidence = append_trace_ledger(
+            corrupt_scope, Trace(trace_id="trace_after_corrupt")
+        )
+        assert corrupt_evidence["verification"]["status"] == "verified", (
+            "a corrupt prior ledger line must not block verifying a new trace"
+        )
+        assert corrupt_evidence["acknowledgement"]["trace_id"] == (
+            "trace_after_corrupt"
+        )
+        results["ledger_skips_corrupt_prior_line"] = {
+            "verified": True,
+            "trace_id": "trace_after_corrupt",
+        }
+
         # Fix #6: a policy block with content after the scope closes (e.g. a
         # second scope block) must be rejected, not silently merged.
         try:

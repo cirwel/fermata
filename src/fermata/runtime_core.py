@@ -149,6 +149,11 @@ def idempotency_lookup(scope: Scope, key: str) -> dict[str, Any] | None:
     Reads the scoped idempotency ledger through an O_NOFOLLOW open so a symlink
     planted at the ledger leaf is refused rather than followed. A missing ledger
     means no prior commit under this key.
+
+    Local-alpha limitation: the ledger is append-only and never compacted, and
+    this lookup re-reads and re-parses the whole file on every commit — O(n) in
+    the number of prior commits under the scope. Fine for the single-writer
+    alpha; a long-lived or high-volume scope would want an index or rotation.
     """
 
     ledger_path = idempotency_store_path(scope)
@@ -289,6 +294,11 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
     This is explicit rather than automatic so pure interpretation remains free of
     external side effects. The ledger write is local, fsynced, and verified by
     reading back the appended trace by ID and line hash.
+
+    Local-alpha limitation: like the idempotency ledger, this file is append-only
+    and never compacted, and the read-back re-reads and re-parses the whole
+    ledger on every append (O(n) in prior traces). Acceptable for the
+    single-writer alpha; rotation or an index is future work.
     """
 
     ledger_path = trace_ledger_path(scope)
@@ -343,7 +353,15 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
     for line in ledger_text.splitlines():
         if not line.strip():
             continue
-        parsed = json.loads(line)
+        # A corrupt historical line (e.g. a torn write from an earlier crash)
+        # must not break verification of the record we just appended: skip it
+        # rather than raise. Our own line is well-formed, so the match below
+        # still finds it. The read-back guarantee is "the record I wrote is on
+        # disk intact", not "every prior line is parseable".
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         line_hash = sha256_bytes((line + "\n").encode("utf-8"))
         if parsed.get("trace_id") == trace.trace_id and line_hash == record_hash:
             matched_record = parsed
