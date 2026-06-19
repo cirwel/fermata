@@ -23,13 +23,16 @@ Security posture (fail-closed). Read this before changing anything:
 - The response body is capped at ``scope.max_bytes`` (Content-Length checked
   early; the stream is also hard-capped). ``Accept-Encoding: identity`` is sent
   so a compressed body cannot inflate past the cap. No credential headers.
+- If the scope declares ``network_allowed_content_types``, the response media
+  type must match (parameters ignored, case-folded) or the fetch is rejected
+  before the body is read/persisted. A missing type fails closed.
 - The persisted write reuses the file adapter's O_NOFOLLOW anchored walk.
 
 Deferred to a future version (documented, not silently missing): per-scope
-request-rate budgets and content-type contract enforcement. (Port restriction
-is enforced: a port-less allowlist entry authorizes only the scheme default.
-Resolved-IP pinning between check and connect is now implemented — see
-``_pinned_safe_ip`` and ``_pinned_opener``.)
+request-rate budgets. (Port restriction is enforced: a port-less allowlist
+entry authorizes only the scheme default. Resolved-IP pinning between check and
+connect is implemented — see ``_pinned_safe_ip`` and ``_pinned_opener`` — as is
+content-type contract enforcement, above.)
 """
 
 from __future__ import annotations
@@ -127,6 +130,19 @@ def _parse_fetch_url(url: str) -> tuple[str, str, int | None, str]:
     except ValueError as exc:
         raise ValueError(RejectionReason.NETWORK_URL_INVALID.value) from exc
     return parsed.scheme, host.lower(), port, parsed.path or "/"
+
+
+def _media_type(content_type_header: str | None) -> str | None:
+    """Reduce a ``Content-Type`` header to its case-folded media type.
+
+    Strips parameters (``; charset=utf-8``) and surrounding whitespace. Returns
+    ``None`` for a missing or empty header so callers can fail closed.
+    """
+
+    if content_type_header is None:
+        return None
+    media_type = content_type_header.split(";", 1)[0].strip().lower()
+    return media_type or None
 
 
 def _effective_port(scheme: str, port: int | None) -> int:
@@ -433,6 +449,19 @@ class NetworkFetchAdapter:
                         raise ValueError(
                             RejectionReason.NETWORK_RESPONSE_TOO_LARGE.value
                         )
+                # Content-type contract: if the scope declares allowed media
+                # types, refuse a mismatched (or missing) type before reading
+                # the body — fail closed, and don't download disallowed content.
+                content_type = _media_type(response.headers.get("Content-Type"))
+                if scope.network_allowed_content_types:
+                    allowed = frozenset(
+                        _media_type(entry) or ""
+                        for entry in scope.network_allowed_content_types
+                    )
+                    if content_type is None or content_type not in allowed:
+                        raise ValueError(
+                            RejectionReason.NETWORK_CONTENT_TYPE_NOT_ALLOWED.value
+                        )
                 status_code = response.status
                 body = b""
                 while True:
@@ -508,6 +537,7 @@ class NetworkFetchAdapter:
             "handle": str(response_path),
             "url": url,
             "status_code": status_code,
+            "content_type": content_type,
             "sha256": body_hash,
             "bytes": len(body),
         }
@@ -558,6 +588,7 @@ def sample_network_scope(
     allow_prefix: str,
     approval_required: bool = True,
     allow_private_network: bool = False,
+    allowed_content_types: tuple[str, ...] = (),
 ) -> Scope:
     """Build a sample network-fetch scope for one allowlisted URL prefix."""
 
@@ -570,6 +601,7 @@ def sample_network_scope(
         ),
         network_allow=(allow_prefix,),
         allow_private_network=allow_private_network,
+        network_allowed_content_types=allowed_content_types,
     )
 
 

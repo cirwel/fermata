@@ -1453,6 +1453,45 @@ def run_self_tests() -> dict[str, Any]:
             "approval_required_for": sorted(exact_scope.approval_required_for),
         }
 
+        # A bundle scope may declare network_allowed_content_types; it must lower
+        # into the Scope tuple, and a malformed value must be rejected (not
+        # silently dropped, which would disable the content-type contract).
+        ct_scope = scope_from_record(
+            {
+                "schema_version": "0.1",
+                "record_type": "scope",
+                "scope_id": "harden_content_types",
+                "capabilities": ["network.fetch"],
+                "network_allow": ["https://example.com/"],
+                "network_allowed_content_types": ["application/json"],
+            },
+            sandbox_root=harden_root,
+        )
+        assert ct_scope.network_allowed_content_types == ("application/json",)
+        results["scope_content_types_lowered"] = {
+            "content_types": list(ct_scope.network_allowed_content_types),
+        }
+        try:
+            scope_from_record(
+                {
+                    "schema_version": "0.1",
+                    "record_type": "scope",
+                    "scope_id": "harden_bad_content_types",
+                    "capabilities": ["network.fetch"],
+                    "network_allowed_content_types": ["", 7],
+                },
+                sandbox_root=harden_root,
+            )
+        except RuntimeApiError as exc:
+            results["scope_bad_content_types_rejected"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "malformed network_allowed_content_types must be rejected"
+            )
+
         # Fix #1: a condition that names no declared capability must be
         # rejected, not silently fall back to requiring approval for all.
         try:
@@ -1659,6 +1698,10 @@ def run_self_tests() -> dict[str, Any]:
                     return
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(fetch_body)))
+                # A typeless path omits Content-Type to exercise fail-closed
+                # content-type enforcement; every other path declares one.
+                if self.path != "/notype":
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(fetch_body)
 
@@ -1857,6 +1900,51 @@ def run_self_tests() -> dict[str, Any]:
                 results["network_pinned_private_rejected"] = {"rejected": True}
             finally:
                 net_mod._resolve_addresses = real_resolve
+
+            # Content-type contract: a declared media type that matches the
+            # response (parameters ignored) commits and records the type.
+            ct_ok_scope = sample_network_scope(
+                net_root,
+                allow_prefix=prefix,
+                approval_required=False,
+                allow_private_network=True,
+                allowed_content_types=("text/plain",),
+            )
+            ct_ok, _ = evaluate_network_fetch(
+                ct_ok_scope,
+                sample_network_proposal(ok_url, target="responses/ct_ok.bin"),
+            )
+            assert ct_ok.state == EffectState.COMMITTED, ct_ok.rejection_reason
+            assert ct_ok.acknowledgement["content_type"] == "text/plain"
+            results["network_content_type_match_commits"] = {"committed": True}
+
+            # A mismatched declared type is rejected before the body persists.
+            ct_miss_scope = sample_network_scope(
+                net_root,
+                allow_prefix=prefix,
+                approval_required=False,
+                allow_private_network=True,
+                allowed_content_types=("application/json",),
+            )
+            ct_miss, _ = evaluate_network_fetch(
+                ct_miss_scope,
+                sample_network_proposal(ok_url, target="responses/ct_miss.bin"),
+            )
+            assert ct_miss.state == EffectState.REJECTED
+            assert ct_miss.rejection_reason == "network_content_type_not_allowed"
+            assert not (net_root / "responses" / "ct_miss.bin").exists()
+            results["network_content_type_mismatch_rejected"] = {"rejected": True}
+
+            # A response with no Content-Type fails closed when a contract is
+            # declared (the /notype fixture path omits the header).
+            notype_url = f"http://127.0.0.1:{net_port}/notype"
+            ct_missing, _ = evaluate_network_fetch(
+                ct_ok_scope,
+                sample_network_proposal(notype_url, target="responses/ct_none.bin"),
+            )
+            assert ct_missing.state == EffectState.REJECTED
+            assert ct_missing.rejection_reason == "network_content_type_not_allowed"
+            results["network_content_type_missing_rejected"] = {"rejected": True}
         finally:
             server.shutdown()
             net_thread.join(timeout=5)
