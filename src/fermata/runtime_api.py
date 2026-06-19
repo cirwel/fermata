@@ -268,6 +268,24 @@ def scope_from_record(
             )
     network_allowed_content_types = tuple(raw_content_types)
 
+    raw_max_effects = record.get("max_effects_per_window", 0)
+    if not isinstance(raw_max_effects, int) or isinstance(raw_max_effects, bool) or (
+        raw_max_effects < 0
+    ):
+        raise RuntimeApiError(
+            "scope.max_effects_per_window must be a non-negative integer"
+        )
+    raw_rate_window = record.get("rate_window_seconds", 0)
+    if isinstance(raw_rate_window, bool) or not isinstance(
+        raw_rate_window, (int, float)
+    ):
+        raise RuntimeApiError("scope.rate_window_seconds must be a number")
+    if raw_max_effects > 0 and raw_rate_window <= 0:
+        raise RuntimeApiError(
+            "scope.rate_window_seconds must be > 0 when "
+            "max_effects_per_window is set"
+        )
+
     return Scope(
         scope_id=require_string(record, "scope_id", label="scope"),
         sandbox_root=sandbox_root.resolve(),
@@ -280,6 +298,8 @@ def scope_from_record(
         network_allow=network_allow,
         allow_private_network=raw_allow_private,
         network_allowed_content_types=network_allowed_content_types,
+        max_effects_per_window=raw_max_effects,
+        rate_window_seconds=float(raw_rate_window),
     )
 
 

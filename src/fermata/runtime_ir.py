@@ -83,6 +83,7 @@ class RejectionReason(str, Enum):
     NETWORK_CONTENT_TYPE_NOT_ALLOWED = "network_content_type_not_allowed"
     NETWORK_REQUEST_FAILED = "network_request_failed"
     IDEMPOTENCY_KEY_CONFLICT = "idempotency_key_conflict"
+    SCOPE_RATE_LIMIT_EXCEEDED = "scope_rate_limit_exceeded"
 
 
 SpeechAct = Literal["need", "claim", "doubt", "intend", "remember", "boundary"]
@@ -110,6 +111,16 @@ class Scope:
     # listed is rejected before the body is persisted. Compared by media type
     # only (parameters such as ``; charset=utf-8`` are ignored), case-folded.
     network_allowed_content_types: tuple[str, ...] = ()
+    # Per-scope rolling-window rate budget across ALL governed effects. When
+    # ``max_effects_per_window`` is > 0, the runtime commits at most that many
+    # effects per scope within any trailing ``rate_window_seconds`` window;
+    # the next committable effect is rejected ``scope_rate_limit_exceeded``.
+    # 0 (the default) means no budget is enforced. Counts only committed
+    # effects — rejected, paused, and idempotent-replayed proposals do not
+    # consume budget. Enforced at-most-N for SERIAL callers (the same
+    # single-writer caveat as ``idempotency_key``).
+    max_effects_per_window: int = 0
+    rate_window_seconds: float = 0.0
 
 
 @dataclass(frozen=True)

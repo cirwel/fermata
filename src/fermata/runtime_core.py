@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -178,14 +179,14 @@ def idempotency_lookup(scope: Scope, key: str) -> dict[str, Any] | None:
     return found
 
 
-def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
-    """Append one idempotency record to the scoped ledger, symlink-safe.
+def _append_jsonl_record(scope: Scope, ledger_path: Path, record: dict[str, Any]) -> None:
+    """Append one JSON record line to a scoped JSONL ledger, symlink-safe.
 
-    Uses the file adapter's O_NOFOLLOW anchored walk so no symlink at any ledger
-    path component can redirect the append.
+    Shared by the idempotency and rate-budget ledgers. Reaches the ledger
+    directory with the file adapter's O_NOFOLLOW anchored walk so no symlink at
+    any path component can redirect the append; the write is fsynced.
     """
 
-    ledger_path = idempotency_store_path(scope)
     ensure_private_directory(ledger_path.parent, root=ledger_path.parent.resolve())
 
     from fermata.file_adapter import open_file_parent_fd
@@ -211,6 +212,113 @@ def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
             pass
     finally:
         os.close(parent_fd)
+
+
+def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
+    """Append one idempotency record to the scoped ledger, symlink-safe."""
+
+    _append_jsonl_record(scope, idempotency_store_path(scope), record)
+
+
+def rate_store_path(scope: Scope) -> Path:
+    """Scoped local rate-budget ledger path (sandbox root resolved, leaf not)."""
+
+    return scope.sandbox_root.resolve() / ".fermata-rate" / "events.jsonl"
+
+
+def _rate_now() -> float:
+    """Monotonic-enough wall clock (epoch seconds) for rate-window arithmetic.
+
+    Factored out so tests can drive the window deterministically.
+    """
+
+    return time.time()
+
+
+def rate_count_recent(scope: Scope, *, now: float, window_seconds: float) -> int:
+    """Count committed-effect events for this scope within the trailing window.
+
+    Reads the scoped rate ledger through an O_NOFOLLOW open. A missing ledger
+    means no prior effects. Events at or after ``now - window_seconds`` count;
+    older events have aged out of the window. A corrupt/unparseable line is
+    skipped rather than raised — an approximate undercount is preferable to
+    failing an otherwise-permitted effect on a torn historical line.
+
+    The ledger is pruned to the active window on each write (see ``rate_record``),
+    so it stays bounded to roughly one window of events rather than growing
+    without limit like the idempotency and trace ledgers.
+    """
+
+    ledger_path = rate_store_path(scope)
+    if not is_inside(scope.sandbox_root, ledger_path):
+        raise ValueError(RejectionReason.PATH_OUTSIDE_SCOPE.value)
+    try:
+        read_fd = os.open(ledger_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return 0
+    with os.fdopen(read_fd, "r", encoding="utf-8") as ledger_file:
+        text = ledger_file.read()
+    threshold = now - window_seconds
+    count = 0
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        ts = record.get("ts")
+        if isinstance(ts, (int, float)) and ts >= threshold:
+            count += 1
+    return count
+
+
+def rate_record(scope: Scope, record: dict[str, Any], *, retain_since: float) -> None:
+    """Record a committed-effect event, pruning events older than the window.
+
+    Rewrites the scoped rate ledger to the events still at or after
+    ``retain_since`` plus the new ``record``, so the ledger stays bounded to the
+    active window instead of growing forever (events older than the window can
+    never count again). The rewrite is atomic and symlink-safe — it reuses the
+    anchored O_NOFOLLOW temp-write-and-rename primitive and verifies by reading
+    the bytes back. Corrupt historical lines are dropped, not raised.
+
+    A compacting rewrite (rather than a bare append) means a concurrent writer's
+    event can be lost — the same single-writer caveat that already applies to the
+    budget count itself; under concurrency it can only under-count (fail open).
+    """
+
+    ledger_path = rate_store_path(scope)
+    kept: list[dict[str, Any]] = []
+    try:
+        read_fd = os.open(ledger_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        read_fd = None
+    if read_fd is not None:
+        with os.fdopen(read_fd, "r", encoding="utf-8") as ledger_file:
+            text = ledger_file.read()
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                existing = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = existing.get("ts")
+            if isinstance(ts, (int, float)) and ts >= retain_since:
+                kept.append(existing)
+    kept.append(record)
+
+    ensure_private_directory(ledger_path.parent, root=ledger_path.parent.resolve())
+    content = "".join(
+        json.dumps(entry, sort_keys=True) + "\n" for entry in kept
+    ).encode("utf-8")
+
+    def _verify_readback(readback: bytes) -> None:
+        if readback != content:
+            raise ValueError("rate_ledger_read_back_mismatch")
+
+    anchored_atomic_write(scope, ledger_path, content, verify=_verify_readback)
 
 
 def reject(
@@ -579,6 +687,41 @@ def evaluate_with_adapter(
     if _stop_at_approval:
         return approved_result(trace, scope, intent, approval_decision), trace
 
+    # Per-scope rolling-window rate budget: count committed effects in the
+    # trailing window and refuse once the scope is at its cap. Checked after
+    # approval (only an otherwise-committable effect consumes budget) and
+    # before commit (a refusal performs no external effect). Idempotent replays
+    # returned earlier never reach here, so they never consume budget.
+    effect_now: float | None = None
+    if scope.max_effects_per_window > 0:
+        effect_now = _rate_now()
+        try:
+            recent = rate_count_recent(
+                scope, now=effect_now, window_seconds=scope.rate_window_seconds
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.ADAPTER_COMMIT_FAILED,
+                error_type=exc.__class__.__name__,
+            ), trace
+        if recent >= scope.max_effects_per_window:
+            trace.add(
+                "effect.rate_limited",
+                max_effects_per_window=scope.max_effects_per_window,
+                rate_window_seconds=scope.rate_window_seconds,
+                recent=recent,
+            )
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.SCOPE_RATE_LIMIT_EXCEEDED,
+                max_effects_per_window=scope.max_effects_per_window,
+            ), trace
+
     trace.add(
         "adapter.commit.started",
         adapter=adapter.adapter,
@@ -624,6 +767,27 @@ def evaluate_with_adapter(
         except (OSError, ValueError) as exc:
             trace.add(
                 "effect.idempotency_record_failed",
+                error_type=exc.__class__.__name__,
+            )
+
+    # Record this committed effect against the scope's rate budget. As with the
+    # idempotency record, the effect has already happened, so a recording
+    # failure is traced rather than raised — it can only under-count the window.
+    if scope.max_effects_per_window > 0 and effect_now is not None:
+        try:
+            rate_record(
+                scope,
+                {
+                    "ts": effect_now,
+                    "scope_id": scope.scope_id,
+                    "effect_id": committed.effect_id,
+                    "committed_at": committed.committed_at,
+                },
+                retain_since=effect_now - scope.rate_window_seconds,
+            )
+        except (OSError, ValueError) as exc:
+            trace.add(
+                "effect.rate_record_failed",
                 error_type=exc.__class__.__name__,
             )
 
