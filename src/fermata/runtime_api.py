@@ -257,6 +257,17 @@ def scope_from_record(
     if not isinstance(raw_allow_private, bool):
         raise RuntimeApiError("scope.allow_private_network must be a boolean")
 
+    raw_content_types = record.get("network_allowed_content_types", [])
+    if raw_content_types:
+        if not isinstance(raw_content_types, list) or not all(
+            isinstance(item, str) and item for item in raw_content_types
+        ):
+            raise RuntimeApiError(
+                "scope.network_allowed_content_types must be an array of "
+                "non-empty strings"
+            )
+    network_allowed_content_types = tuple(raw_content_types)
+
     return Scope(
         scope_id=require_string(record, "scope_id", label="scope"),
         sandbox_root=sandbox_root.resolve(),
@@ -268,6 +279,7 @@ def scope_from_record(
         ),
         network_allow=network_allow,
         allow_private_network=raw_allow_private,
+        network_allowed_content_types=network_allowed_content_types,
     )
 
 

@@ -15,17 +15,24 @@ Security posture (fail-closed). Read this before changing anything:
 - Only ``http``/``https`` schemes; only the ``GET`` method.
 - Private / loopback / link-local / reserved resolutions are rejected unless the
   scope sets ``allow_private_network`` (opt-in for governing local services).
-  The resolution check runs again at commit to narrow the DNS-rebinding window.
+  At commit the host is resolved once, every resolved address is validated, and
+  the connection is pinned to that exact IP — the socket never re-resolves, so a
+  name cannot rebind to a private address between the check and the connect. TLS
+  SNI / certificate verification still authenticates the original hostname.
 - Redirects are never followed: any 3xx is rejected.
 - The response body is capped at ``scope.max_bytes`` (Content-Length checked
   early; the stream is also hard-capped). ``Accept-Encoding: identity`` is sent
   so a compressed body cannot inflate past the cap. No credential headers.
+- If the scope declares ``network_allowed_content_types``, the response media
+  type must match (parameters ignored, case-folded) or the fetch is rejected
+  before the body is read/persisted. A missing type fails closed.
 - The persisted write reuses the file adapter's O_NOFOLLOW anchored walk.
 
-Deferred to a future version (documented, not silently missing): resolved-IP
-pinning between check and connect (full DNS-rebinding immunity), per-scope
-request-rate budgets, and content-type contract enforcement. (Port restriction
-is enforced: a port-less allowlist entry authorizes only the scheme default.)
+Deferred to a future version (documented, not silently missing): per-scope
+request-rate budgets. (Port restriction is enforced: a port-less allowlist
+entry authorizes only the scheme default. Resolved-IP pinning between check and
+connect is implemented — see ``_pinned_safe_ip`` and ``_pinned_opener`` — as is
+content-type contract enforcement, above.)
 """
 
 from __future__ import annotations
@@ -125,6 +132,19 @@ def _parse_fetch_url(url: str) -> tuple[str, str, int | None, str]:
     return parsed.scheme, host.lower(), port, parsed.path or "/"
 
 
+def _media_type(content_type_header: str | None) -> str | None:
+    """Reduce a ``Content-Type`` header to its case-folded media type.
+
+    Strips parameters (``; charset=utf-8``) and surrounding whitespace. Returns
+    ``None`` for a missing or empty header so callers can fail closed.
+    """
+
+    if content_type_header is None:
+        return None
+    media_type = content_type_header.split(";", 1)[0].strip().lower()
+    return media_type or None
+
+
 def _effective_port(scheme: str, port: int | None) -> int:
     """The port a URL targets, filling in the scheme default when unstated."""
 
@@ -158,32 +178,85 @@ def _url_in_allowlist(
     return False
 
 
-def _resolves_to_private(host: str, port: int | None) -> bool:
-    """True if the host resolves to (or is) a private/loopback/link-local address.
+def _ip_is_unsafe(ip: ipaddress._BaseAddress) -> bool:
+    """True for private/loopback/link-local/reserved/multicast/unspecified IPs."""
 
-    Unresolvable hosts are treated as unsafe (return True) so the caller rejects.
+    return bool(
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _resolve_addresses(
+    host: str, port: int | None
+) -> list[tuple[str, ipaddress._BaseAddress]]:
+    """Resolve ``host`` once to ``(ip_str, ip_object)`` pairs.
+
+    A literal IP host resolves to itself (no DNS). A hostname is resolved via
+    ``getaddrinfo``; duplicates are collapsed, order preserved. An unresolvable
+    host returns an empty list so callers fail closed.
     """
 
     try:
-        ip = ipaddress.ip_address(host)
-        candidates = [ip]
+        literal = ipaddress.ip_address(host)
+        return [(str(literal), literal)]
     except ValueError:
-        try:
-            infos = socket.getaddrinfo(host, port or 0, type=socket.SOCK_STREAM)
-        except socket.gaierror:
-            return True
-        candidates = [ipaddress.ip_address(info[4][0]) for info in infos]
-    for ip in candidates:
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            return True
-    return False
+        pass
+    try:
+        infos = socket.getaddrinfo(host, port or 0, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return []
+    out: list[tuple[str, ipaddress._BaseAddress]] = []
+    seen: set[str] = set()
+    for info in infos:
+        addr = info[4][0]
+        if addr in seen:
+            continue
+        seen.add(addr)
+        out.append((addr, ipaddress.ip_address(addr)))
+    return out
+
+
+def _resolves_to_private(host: str, port: int | None) -> bool:
+    """True if the host resolves to (or is) a private/loopback/etc. address.
+
+    Unresolvable hosts are treated as unsafe (return True) so the caller rejects.
+    Used for the prepare-time early rejection; the authoritative resolve-and-pin
+    happens in ``_pinned_safe_ip`` at commit.
+    """
+
+    addresses = _resolve_addresses(host, port)
+    if not addresses:
+        return True
+    return any(_ip_is_unsafe(ip) for _, ip in addresses)
+
+
+def _pinned_safe_ip(host: str, port: int | None, *, allow_private: bool) -> str:
+    """Resolve ``host`` once and return the single IP the connection will pin to.
+
+    Resolving, validating, and connecting all key off the *same* resolution: the
+    IP this returns is the exact IP the socket connects to (see ``_pinned_opener``),
+    with no re-resolution in between. That closes the DNS-rebinding window — a
+    name that resolved to a public IP during the safety check cannot rebind to a
+    private IP before the connect, because the connect never resolves again.
+
+    Raises ``ValueError`` whose message is a ``RejectionReason`` value:
+    ``NETWORK_HOST_IS_PRIVATE`` if any resolved address is unsafe (unless
+    ``allow_private``), ``NETWORK_REQUEST_FAILED`` if the host does not resolve.
+    """
+
+    addresses = _resolve_addresses(host, port)
+    if not addresses:
+        raise ValueError(RejectionReason.NETWORK_REQUEST_FAILED.value)
+    if not allow_private:
+        for _, ip in addresses:
+            if _ip_is_unsafe(ip):
+                raise ValueError(RejectionReason.NETWORK_HOST_IS_PRIVATE.value)
+    return addresses[0][0]
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -193,6 +266,56 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(
             req.full_url, code, "redirect_not_allowed", headers, fp
         )
+
+
+def _pinned_opener(pinned_ip: str) -> urllib.request.OpenerDirector:
+    """Build an opener that refuses redirects and connects only to ``pinned_ip``.
+
+    The TCP connection is made to the pre-validated ``pinned_ip``, but the
+    original hostname is preserved for the ``Host`` header (urllib sets it from
+    the request URL) and for TLS SNI / certificate verification (``server_hostname``
+    stays the hostname). So the bytes go to the validated address while TLS still
+    authenticates the named host — no re-resolution can redirect the socket.
+    """
+
+    class _PinnedHTTPConnection(http.client.HTTPConnection):
+        def connect(self) -> None:
+            self.sock = self._create_connection(
+                (pinned_ip, self.port), self.timeout, self.source_address
+            )
+            if self._tunnel_host:
+                self._tunnel()
+
+    class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+        def connect(self) -> None:
+            self.sock = self._create_connection(
+                (pinned_ip, self.port), self.timeout, self.source_address
+            )
+            if self._tunnel_host:
+                self._tunnel()
+                server_hostname = self._tunnel_host
+            else:
+                server_hostname = self.host
+            self.sock = self._context.wrap_socket(
+                self.sock, server_hostname=server_hostname
+            )
+
+    class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+        def http_open(self, req):
+            return self.do_open(_PinnedHTTPConnection, req)
+
+    class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+        def https_open(self, req):
+            return self.do_open(
+                _PinnedHTTPSConnection,
+                req,
+                context=self._context,
+                check_hostname=self._check_hostname,
+            )
+
+    return urllib.request.build_opener(
+        _NoRedirectHandler, _PinnedHTTPHandler, _PinnedHTTPSHandler
+    )
 
 
 class NetworkFetchAdapter:
@@ -291,14 +414,24 @@ class NetworkFetchAdapter:
         port = preparation.payload["port"]
         response_path = preparation.payload["response_path"]
 
-        # Re-check resolution immediately before connecting to narrow the
-        # DNS-rebinding window (full IP pinning is a documented future item).
-        if not scope.allow_private_network and _resolves_to_private(host, port):
+        # Resolve once, validate, and pin: the IP we check here is the exact IP
+        # the connection is made to (no re-resolution before connect), which
+        # closes the DNS-rebinding window rather than merely narrowing it.
+        try:
+            pinned_ip = _pinned_safe_ip(
+                host, port, allow_private=scope.allow_private_network
+            )
+        except ValueError as exc:
+            trace.add(
+                "adapter.commit.failed",
+                error_type="resolution",
+                target=str(url),
+            )
             return reject(
                 trace,
                 scope,
                 intent.intent_id,
-                RejectionReason.NETWORK_HOST_IS_PRIVATE,
+                RejectionReason(str(exc)),
                 host=host,
             )
 
@@ -307,7 +440,7 @@ class NetworkFetchAdapter:
             method="GET",
             headers={"User-Agent": _USER_AGENT, "Accept-Encoding": "identity"},
         )
-        opener = urllib.request.build_opener(_NoRedirectHandler)
+        opener = _pinned_opener(pinned_ip)
         try:
             with opener.open(request, timeout=READ_TIMEOUT_SECONDS) as response:
                 declared = response.headers.get("Content-Length")
@@ -315,6 +448,19 @@ class NetworkFetchAdapter:
                     if int(declared) > scope.max_bytes:
                         raise ValueError(
                             RejectionReason.NETWORK_RESPONSE_TOO_LARGE.value
+                        )
+                # Content-type contract: if the scope declares allowed media
+                # types, refuse a mismatched (or missing) type before reading
+                # the body — fail closed, and don't download disallowed content.
+                content_type = _media_type(response.headers.get("Content-Type"))
+                if scope.network_allowed_content_types:
+                    allowed = frozenset(
+                        _media_type(entry) or ""
+                        for entry in scope.network_allowed_content_types
+                    )
+                    if content_type is None or content_type not in allowed:
+                        raise ValueError(
+                            RejectionReason.NETWORK_CONTENT_TYPE_NOT_ALLOWED.value
                         )
                 status_code = response.status
                 body = b""
@@ -391,6 +537,7 @@ class NetworkFetchAdapter:
             "handle": str(response_path),
             "url": url,
             "status_code": status_code,
+            "content_type": content_type,
             "sha256": body_hash,
             "bytes": len(body),
         }
@@ -441,6 +588,7 @@ def sample_network_scope(
     allow_prefix: str,
     approval_required: bool = True,
     allow_private_network: bool = False,
+    allowed_content_types: tuple[str, ...] = (),
 ) -> Scope:
     """Build a sample network-fetch scope for one allowlisted URL prefix."""
 
@@ -453,6 +601,7 @@ def sample_network_scope(
         ),
         network_allow=(allow_prefix,),
         allow_private_network=allow_private_network,
+        network_allowed_content_types=allowed_content_types,
     )
 
 

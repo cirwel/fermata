@@ -80,6 +80,7 @@ class RejectionReason(str, Enum):
     NETWORK_METHOD_NOT_ALLOWED = "network_method_not_allowed"
     NETWORK_REDIRECT_NOT_ALLOWED = "network_redirect_not_allowed"
     NETWORK_RESPONSE_TOO_LARGE = "network_response_too_large"
+    NETWORK_CONTENT_TYPE_NOT_ALLOWED = "network_content_type_not_allowed"
     NETWORK_REQUEST_FAILED = "network_request_failed"
     IDEMPOTENCY_KEY_CONFLICT = "idempotency_key_conflict"
 
@@ -103,6 +104,12 @@ class Scope:
     # addresses. Default deny (SSRF guard); operators opt in for governing
     # fetches to local services.
     allow_private_network: bool = False
+    # Response media types the network.fetch adapter will accept (e.g.
+    # ``("application/json",)``). Empty means no content-type contract is
+    # enforced. When non-empty, a response whose media type is absent or not
+    # listed is rejected before the body is persisted. Compared by media type
+    # only (parameters such as ``; charset=utf-8`` are ignored), case-folded.
+    network_allowed_content_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
