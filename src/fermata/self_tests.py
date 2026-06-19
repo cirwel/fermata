@@ -27,7 +27,11 @@ from fermata.network_adapter import (
     sample_network_proposal,
     sample_network_scope,
 )
-from fermata.runtime_core import append_trace_ledger, trace_ledger_path
+from fermata.runtime_core import (
+    append_trace_ledger,
+    rate_count_recent,
+    trace_ledger_path,
+)
 from fermata.runtime_ir import (
     AdapterPreparation,
     ApprovalAuthority,
@@ -1492,6 +1496,48 @@ def run_self_tests() -> dict[str, Any]:
                 "malformed network_allowed_content_types must be rejected"
             )
 
+        # A bundle scope may declare a rate budget; it lowers into the Scope and
+        # an enabled budget with no window is rejected (a budget with no window
+        # could never enforce, so it must not silently pass).
+        budget_scope = scope_from_record(
+            {
+                "schema_version": "0.1",
+                "record_type": "scope",
+                "scope_id": "harden_rate_budget",
+                "capabilities": ["file.write"],
+                "max_effects_per_window": 5,
+                "rate_window_seconds": 60,
+            },
+            sandbox_root=harden_root,
+        )
+        assert budget_scope.max_effects_per_window == 5
+        assert budget_scope.rate_window_seconds == 60.0
+        results["scope_rate_budget_lowered"] = {
+            "max_effects_per_window": budget_scope.max_effects_per_window,
+            "rate_window_seconds": budget_scope.rate_window_seconds,
+        }
+        try:
+            scope_from_record(
+                {
+                    "schema_version": "0.1",
+                    "record_type": "scope",
+                    "scope_id": "harden_budget_no_window",
+                    "capabilities": ["file.write"],
+                    "max_effects_per_window": 5,
+                    "rate_window_seconds": 0,
+                },
+                sandbox_root=harden_root,
+            )
+        except RuntimeApiError as exc:
+            results["scope_budget_without_window_rejected"] = {
+                "rejected": True,
+                "error": str(exc),
+            }
+        else:
+            raise AssertionError(
+                "an enabled rate budget with no window must be rejected"
+            )
+
         # Fix #1: a condition that names no declared capability must be
         # rejected, not silently fall back to requiring approval for all.
         try:
@@ -2000,6 +2046,91 @@ def run_self_tests() -> dict[str, Any]:
         assert idem_conflict.state == EffectState.REJECTED
         assert idem_conflict.rejection_reason == "idempotency_key_conflict"
         results["idempotency_conflict_rejected"] = {"rejected": True}
+
+        # --- Per-scope rolling-window rate budget (all governed effects) ---
+        import fermata.runtime_core as rate_core
+
+        real_rate_now = rate_core._rate_now
+        clock = {"t": 1000.0}
+        rate_core._rate_now = lambda: clock["t"]
+
+        def _rate_proposal(name: str) -> Proposal:
+            return Proposal(
+                proposal_id=f"prop_rate_{name}",
+                actor="agent:tester",
+                speech_act="intend",
+                reason="rate budget probe",
+                confidence=0.5,
+                evidence=[],
+                intent=Intent(
+                    intent_id=f"intent_rate_{name}",
+                    proposal_id=f"prop_rate_{name}",
+                    adapter="file",
+                    operation="write",
+                    target=f"rate-{name}.txt",
+                    input={"content": name},
+                    required_capability="file.write",
+                ),
+            )
+
+        try:
+            rate_root = Path(tmp) / "rate_sandbox"
+            rate_scope = Scope(
+                scope_id="rate_budget_scope",
+                sandbox_root=rate_root.resolve(),
+                capabilities=frozenset({"file.read", "file.write"}),
+                max_effects_per_window=2,
+                rate_window_seconds=100.0,
+            )
+
+            # Two committed effects fit within the window.
+            rate_a, _ = evaluate_file_write(rate_scope, _rate_proposal("a"))
+            assert rate_a.state == EffectState.COMMITTED, rate_a.rejection_reason
+            clock["t"] = 1001.0
+            rate_b, _ = evaluate_file_write(rate_scope, _rate_proposal("b"))
+            assert rate_b.state == EffectState.COMMITTED, rate_b.rejection_reason
+
+            # The third within the same window is refused before any commit.
+            clock["t"] = 1002.0
+            rate_c, rate_c_trace = evaluate_file_write(
+                rate_scope, _rate_proposal("c")
+            )
+            assert rate_c.state == EffectState.REJECTED
+            assert rate_c.rejection_reason == "scope_rate_limit_exceeded"
+            assert "adapter.commit.started" not in [
+                event["type"] for event in rate_c_trace.events
+            ]
+            assert not (rate_root / "rate-c.txt").exists(), (
+                "a rate-limited effect must not write its file"
+            )
+            results["scope_rate_limit_blocks_over_budget"] = {"rejected": True}
+
+            # Once the earlier events age out of the window, effects flow again.
+            clock["t"] = 1200.0
+            rate_d, _ = evaluate_file_write(rate_scope, _rate_proposal("d"))
+            assert rate_d.state == EffectState.COMMITTED, rate_d.rejection_reason
+            results["scope_rate_limit_window_recovers"] = {"committed": True}
+
+            # A paused (approval-required) proposal must not consume budget: with
+            # a fresh single-slot scope, a pause leaves the slot available.
+            pause_root = Path(tmp) / "rate_pause_sandbox"
+            pause_scope = Scope(
+                scope_id="rate_pause_scope",
+                sandbox_root=pause_root.resolve(),
+                capabilities=frozenset({"file.read", "file.write"}),
+                approval_required_for=frozenset({"file.write"}),
+                max_effects_per_window=1,
+                rate_window_seconds=100.0,
+            )
+            clock["t"] = 2000.0
+            paused, _ = evaluate_file_write(pause_scope, _rate_proposal("p"))
+            assert paused.state == EffectState.PAUSED
+            assert rate_count_recent(
+                pause_scope, now=clock["t"], window_seconds=100.0
+            ) == 0, "a paused proposal must not consume rate budget"
+            results["scope_rate_limit_pause_no_consume"] = {"paused": True}
+        finally:
+            rate_core._rate_now = real_rate_now
 
     return results
 

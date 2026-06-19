@@ -28,11 +28,13 @@ Security posture (fail-closed). Read this before changing anything:
   before the body is read/persisted. A missing type fails closed.
 - The persisted write reuses the file adapter's O_NOFOLLOW anchored walk.
 
-Deferred to a future version (documented, not silently missing): per-scope
-request-rate budgets. (Port restriction is enforced: a port-less allowlist
-entry authorizes only the scheme default. Resolved-IP pinning between check and
-connect is implemented — see ``_pinned_safe_ip`` and ``_pinned_opener`` — as is
-content-type contract enforcement, above.)
+All of this adapter's originally-deferred guards are now implemented: port
+restriction (a port-less allowlist entry authorizes only the scheme default),
+resolved-IP pinning between check and connect (``_pinned_safe_ip`` /
+``_pinned_opener``), content-type contract enforcement (above), and per-scope
+request-rate budgets — the last enforced generically in the runtime core for all
+governed effects (``scope.max_effects_per_window`` /
+``runtime_core.rate_count_recent``), so it caps network fetches too.
 """
 
 from __future__ import annotations
