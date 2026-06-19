@@ -2,7 +2,7 @@
 
 **Created:** May 05, 2026
 **Last Updated:** June 16, 2026
-**Status:** v0.1.0 local alpha published; main has forward fixes
+**Status:** v0.1.1 local alpha published; main tracks the published tag
 
 ---
 
@@ -50,21 +50,20 @@ retry a governed proposal without fear of double-applying the effect.
 
 Fermata has a published local-alpha prerelease:
 
-- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.0>
-- Annotated tag: `v0.1.0`
-- Tag target: `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`
-- Package version: `0.1.0`
+- GitHub Release: <https://github.com/cirwel/fermata/releases/tag/v0.1.1>
+- Annotated tag: `v0.1.1`
+- Tag target: `40db0525d8b0d321fd1ed24c25180e559ef18ca8`
+- Package version: `0.1.1`
 
-The published tag is intentionally unchanged. Current `main` is ahead of that
-tag with forward fixes for post-tag validation and installed golden-check
-reference data. Install from current `main` or a later release when you need the
-installed `fermata-golden-checks` command to run outside a source checkout.
-
-A `v0.1.1` patch release candidate is now prepared (package version `0.1.1`),
-folding those forward fixes into a coherent packet. The release-evidence
-checkers are version-aware and the candidate record carries a documented
-pre-merge `pending_ci` state; no `v0.1.1` tag has been created or pushed. See
+The `v0.1.1` patch release folds the post-`v0.1.0` forward fixes — version-aware
+release-evidence checkers and installed golden-check reference data — into a
+coherent packet, so the installed `fermata-golden-checks` command runs outside a
+source checkout. Install from the `v0.1.1` tag, current `main`, or a later
+release. See
 [docs/releases/local-alpha-v0.1.1.md](docs/releases/local-alpha-v0.1.1.md).
+
+The earlier `v0.1.0` tag (target `1934721f0ba4bd71bd8bc4daf82cba096ef65df4`,
+package version `0.1.0`) remains published and intentionally unchanged.
 
 ## Why "Fermata"?
 
