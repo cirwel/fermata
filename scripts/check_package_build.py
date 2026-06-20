@@ -109,12 +109,14 @@ def run_command(
     command: list[str],
     *,
     cwd: Path | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command and raise with useful tails on failure."""
 
     result = subprocess.run(
         command,
         cwd=cwd,
+        env=env,
         capture_output=True,
         text=True,
         check=False,
@@ -126,6 +128,15 @@ def run_command(
             f"command failed: {command}\nstdout:\n{stdout_tail}\nstderr:\n{stderr_tail}"
         )
     return result
+
+
+def venv_python_env() -> dict[str, str]:
+    """Return an environment that cannot import checkout sources by accident."""
+
+    env = os.environ.copy()
+    for key in ("PYTHONHOME", "PYTHONPATH"):
+        env.pop(key, None)
+    return env
 
 
 def copy_clean_source(source: Path, destination: Path) -> None:
@@ -283,7 +294,11 @@ def check_installed_wheel(wheel: Path, venv_dir: Path) -> dict[str, Any]:
 
     venv.EnvBuilder(with_pip=True, system_site_packages=True).create(venv_dir)
     python, scripts_dir = venv_paths(venv_dir)
-    run_command([str(python), "-m", "pip", "install", "--no-index", str(wheel)])
+    isolated_env = venv_python_env()
+    run_command(
+        [str(python), "-m", "pip", "install", "--no-index", str(wheel)],
+        env=isolated_env,
+    )
 
     missing_scripts = [
         name
@@ -305,25 +320,29 @@ def check_installed_wheel(wheel: Path, venv_dir: Path) -> dict[str, Any]:
                 "assert CHORUS.startswith('Agents may propose'); "
                 "assert RuntimeOutput; assert interpret; assert run"
             ),
-        ]
+        ],
+        env=isolated_env,
     )
-    cli_help = run_command([str(scripts_dir / "fermata"), "--help"])
+    cli_help = run_command([str(scripts_dir / "fermata"), "--help"], env=isolated_env)
     parser_run = run_command(
         [
             str(scripts_dir / "fermata-parse-tongue"),
             'claim "package entry point works" evidence:[package_gate]',
-        ]
+        ],
+        env=isolated_env,
     )
     outside_cwd = venv_dir.parent / "outside_cwd"
     outside_cwd.mkdir()
     golden_run = run_command(
         [str(scripts_dir / "fermata-golden-checks")],
         cwd=outside_cwd,
+        env=isolated_env,
     )
     golden_result = json.loads(golden_run.stdout)
 
     return {
         "console_scripts_present": sorted(EXPECTED_CONSOLE_SCRIPTS),
+        "env_scrubbed": ["PYTHONHOME", "PYTHONPATH"],
         "import_check_returncode": import_check.returncode,
         "fermata_help_contains": "Evaluate local governed-effect JSON records."
         in cli_help.stdout,
