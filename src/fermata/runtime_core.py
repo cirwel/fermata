@@ -10,6 +10,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None  # type: ignore[assignment]
+
 from fermata.runtime_ir import (
     AdapterPreparation,
     ApprovalDecision,
@@ -218,6 +223,61 @@ def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
     """Append one idempotency record to the scoped ledger, symlink-safe."""
 
     _append_jsonl_record(scope, idempotency_store_path(scope), record)
+
+
+def _idempotency_lock_path(scope: Scope, key: str) -> Path:
+    """Scoped lock-file path for one (scope, idempotency_key) pair."""
+
+    digest = sha256_bytes(f"{scope.scope_id}\x00{key}".encode("utf-8"))
+    return idempotency_store_path(scope).parent / "locks" / f"{digest}.lock"
+
+
+def _acquire_idempotency_lock(scope: Scope, key: str) -> int | None:
+    """Take an exclusive advisory lock for (scope, key); return the held fd.
+
+    The lock serializes the replay-check → commit → record critical section so
+    two concurrent submissions of the same key cannot both miss and both commit.
+    It is per (scope, key): distinct keys never contend. The lock file is opened
+    O_NOFOLLOW under the anchored idempotency-directory walk. Returns ``None``
+    where POSIX advisory locks are unavailable, falling back to the documented
+    serial-only guarantee. Raises ``OSError`` if the lock cannot be taken.
+    """
+
+    if fcntl is None:  # pragma: no cover - non-POSIX fallback
+        return None
+    lock_path = _idempotency_lock_path(scope, key)
+    ensure_private_directory(lock_path.parent, root=lock_path.parent.resolve())
+
+    from fermata.file_adapter import open_file_parent_fd
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = open_file_parent_fd(scope, lock_path)
+    try:
+        fd = os.open(
+            lock_path.name,
+            os.O_RDWR | os.O_CREAT | nofollow,
+            0o600,
+            dir_fd=parent_fd,
+        )
+    finally:
+        os.close(parent_fd)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    except OSError:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _release_idempotency_lock(fd: int | None) -> None:
+    """Release and close an advisory lock fd from ``_acquire_idempotency_lock``."""
+
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 def rate_store_path(scope: Scope) -> Path:
@@ -574,6 +634,53 @@ def evaluate_with_adapter(
             intent.intent_id,
             RejectionReason.INPUT_MISSING_OR_NOT_OBJECT,
         ), trace
+
+    # Hold a per-(scope, key) lock across the entire replay-check → commit →
+    # record critical section so two concurrent submissions of the same key
+    # cannot both miss the replay check and both commit. Distinct keys (or none)
+    # never contend, and the lock is released on every return path below.
+    lock_handle = None
+    if not _stop_at_approval and intent.idempotency_key:
+        try:
+            lock_handle = _acquire_idempotency_lock(scope, intent.idempotency_key)
+        except OSError as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.ADAPTER_COMMIT_FAILED,
+                error_type=exc.__class__.__name__,
+            ), trace
+    try:
+        return _run_committable(
+            scope,
+            proposal,
+            intent,
+            adapter,
+            trace,
+            approval=approval,
+            approval_granted=approval_granted,
+            _stop_at_approval=_stop_at_approval,
+        )
+    finally:
+        _release_idempotency_lock(lock_handle)
+
+
+def _run_committable(
+    scope: Scope,
+    proposal: Proposal,
+    intent: Intent,
+    adapter: GovernedAdapter,
+    trace: Trace,
+    *,
+    approval: ApprovalDecision | None,
+    approval_granted: bool,
+    _stop_at_approval: bool,
+) -> tuple[EffectResult, Trace]:
+    """Run the replay-check → prepare → approval → rate-budget → commit → record
+    path. Extracted from ``evaluate_with_adapter`` so the whole critical section
+    can run under a per-(scope, key) idempotency lock when a key is present.
+    """
 
     # Idempotent replay: if this scope already committed an effect under the same
     # key, return the prior committed result instead of re-running the adapter.
