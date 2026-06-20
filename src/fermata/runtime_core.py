@@ -238,8 +238,9 @@ def _acquire_idempotency_lock(scope: Scope, key: str) -> int | None:
     The lock serializes the replay-check → commit → record critical section so
     two concurrent submissions of the same key cannot both miss and both commit.
     It is per (scope, key): distinct keys never contend. The lock file is opened
-    O_NOFOLLOW under the anchored idempotency-directory walk. Returns ``None``
-    where POSIX advisory locks are unavailable, falling back to the documented
+    O_NOFOLLOW under the anchored idempotency-directory walk, and first creation
+    avoids concurrent ``O_CREAT`` on the same dir-fd path. Returns ``None`` where
+    POSIX advisory locks are unavailable, falling back to the documented
     serial-only guarantee. Raises ``OSError`` if the lock cannot be taken.
     """
 
@@ -253,12 +254,41 @@ def _acquire_idempotency_lock(scope: Scope, key: str) -> int | None:
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     parent_fd = open_file_parent_fd(scope, lock_path)
     try:
-        fd = os.open(
-            lock_path.name,
-            os.O_RDWR | os.O_CREAT | nofollow,
-            0o600,
-            dir_fd=parent_fd,
-        )
+        try:
+            fd = os.open(lock_path.name, os.O_RDWR | nofollow, dir_fd=parent_fd)
+        except FileNotFoundError:
+            # On Darwin, two threads concurrently opening the same missing name
+            # with O_CREAT under a directory fd can produce ENOENT for one side.
+            # Create a unique inode, link it into the stable lock name if still
+            # absent, then open the stable file that all contenders flock.
+            temp_name = f".{lock_path.stem}.{uuid.uuid4().hex}.tmp"
+            temp_fd: int | None = None
+            try:
+                temp_fd = os.open(
+                    temp_name,
+                    os.O_RDWR | os.O_CREAT | os.O_EXCL | nofollow,
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                os.fchmod(temp_fd, 0o600)
+                try:
+                    os.link(
+                        temp_name,
+                        lock_path.name,
+                        src_dir_fd=parent_fd,
+                        dst_dir_fd=parent_fd,
+                        follow_symlinks=False,
+                    )
+                except FileExistsError:
+                    pass
+            finally:
+                if temp_fd is not None:
+                    os.close(temp_fd)
+                try:
+                    os.unlink(temp_name, dir_fd=parent_fd)
+                except OSError:
+                    pass
+            fd = os.open(lock_path.name, os.O_RDWR | nofollow, dir_fd=parent_fd)
     finally:
         os.close(parent_fd)
     try:
