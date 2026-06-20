@@ -461,12 +461,12 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
 
     This is explicit rather than automatic so pure interpretation remains free of
     external side effects. The ledger write is local, fsynced, and verified by
-    reading back the appended trace by ID and line hash.
+    reading back the appended bytes at the file tail (an O(1) compare, falling
+    back to a full scan only on a tail mismatch such as a concurrent append).
 
-    Local-alpha limitation: like the idempotency ledger, this file is append-only
-    and never compacted, and the read-back re-reads and re-parses the whole
-    ledger on every append (O(n) in prior traces). Acceptable for the
-    single-writer alpha; rotation or an index is future work.
+    Local-alpha limitation: the file is append-only and never compacted, so it
+    grows without bound. The append itself is no longer O(n) — verification reads
+    only the tail — but a full audit history is retained; rotation is future work.
     """
 
     ledger_path = trace_ledger_path(scope)
@@ -511,31 +511,48 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
         except OSError:
             pass
 
+        # O(1) read-back: the record we just appended is the file's tail, so
+        # compare the last len(record_bytes) bytes to it rather than re-reading
+        # and re-parsing the whole ledger (which made each append O(n) and the
+        # ledger O(n^2) to fill). Fall back to a full scan only if the tail does
+        # not match — e.g. a concurrent append landed after ours — preserving
+        # correctness without the per-append whole-file cost.
         read_fd = os.open(ledger_name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
-        with os.fdopen(read_fd, "rb") as ledger_read:
-            ledger_text = ledger_read.read().decode("utf-8")
+        try:
+            size = os.fstat(read_fd).st_size
+            tail = os.pread(
+                read_fd, len(record_bytes), max(0, size - len(record_bytes))
+            )
+            ledger_text = (
+                None
+                if tail == record_bytes
+                else os.pread(read_fd, size, 0).decode("utf-8")
+            )
+        finally:
+            os.close(read_fd)
     finally:
         os.close(parent_fd)
 
-    matched_record: dict[str, Any] | None = None
-    for line in ledger_text.splitlines():
-        if not line.strip():
-            continue
-        # A corrupt historical line (e.g. a torn write from an earlier crash)
-        # must not break verification of the record we just appended: skip it
-        # rather than raise. Our own line is well-formed, so the match below
-        # still finds it. The read-back guarantee is "the record I wrote is on
-        # disk intact", not "every prior line is parseable".
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        line_hash = sha256_bytes((line + "\n").encode("utf-8"))
-        if parsed.get("trace_id") == trace.trace_id and line_hash == record_hash:
-            matched_record = parsed
-            break
-    if matched_record != trace_record:
-        raise ValueError("trace_ledger_read_back_mismatch")
+    if ledger_text is not None:
+        matched_record: dict[str, Any] | None = None
+        for line in ledger_text.splitlines():
+            if not line.strip():
+                continue
+            # A corrupt historical line (e.g. a torn write from an earlier crash)
+            # must not break verification of the record we just appended: skip it
+            # rather than raise. Our own line is well-formed, so the match below
+            # still finds it. The read-back guarantee is "the record I wrote is on
+            # disk intact", not "every prior line is parseable".
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            line_hash = sha256_bytes((line + "\n").encode("utf-8"))
+            if parsed.get("trace_id") == trace.trace_id and line_hash == record_hash:
+                matched_record = parsed
+                break
+        if matched_record != trace_record:
+            raise ValueError("trace_ledger_read_back_mismatch")
 
     ack = {
         "adapter": "trace_ledger",

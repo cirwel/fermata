@@ -186,6 +186,22 @@ def run_self_tests() -> dict[str, Any]:
         ).read_text(encoding="utf-8").count(committed_trace.trace_id) == 1
         results["trace_ledger_append_verified"] = trace_ledger_evidence
 
+        # A second append to a non-empty ledger must still verify via the O(1)
+        # tail read-back (the tail-offset math must land on the new record, not
+        # the prior one) and leave both records on disk.
+        second_trace = Trace(trace_id="trace_second_append")
+        second_trace.add("effect.committed", note="second")
+        second_evidence = append_trace_ledger(
+            sample_scope(root, approval_required=False), second_trace
+        )
+        assert second_evidence["verification"]["status"] == "verified"
+        ledger_after = trace_ledger_path(
+            sample_scope(root, approval_required=False)
+        ).read_text(encoding="utf-8")
+        assert ledger_after.count(committed_trace.trace_id) == 1
+        assert ledger_after.count("trace_second_append") == 1
+        results["trace_ledger_second_append_tail_verified"] = {"verified": True}
+
         old_umask = os.umask(0o444)
         try:
             restrictive_file, restrictive_file_trace = evaluate_file_write(
