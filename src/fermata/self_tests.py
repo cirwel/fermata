@@ -2071,6 +2071,52 @@ def run_self_tests() -> dict[str, Any]:
 
         lock_scope = sample_scope(Path(tmp) / "lock_sandbox", approval_required=False)
         if _core.fcntl is not None:
+            # Two first-time contenders for the same missing lock file must both
+            # acquire the stable lock in turn. This guards the creation path, not
+            # just flocking an already-existing file.
+            import time as _time
+
+            race_scope = sample_scope(
+                Path(tmp) / "lock_race_sandbox", approval_required=False
+            )
+            race_start = _threading.Barrier(2)
+            race_acquired: list[bool] = []
+            race_errors: list[str] = []
+            race_guard = _threading.Lock()
+
+            def _race_for_new_lock() -> None:
+                fd: int | None = None
+                try:
+                    race_start.wait()
+                    fd = _core._acquire_idempotency_lock(race_scope, "RACE")
+                    with race_guard:
+                        race_acquired.append(True)
+                    _time.sleep(0.05)
+                except Exception as exc:  # pragma: no cover - assertion evidence
+                    with race_guard:
+                        race_errors.append(repr(exc))
+                finally:
+                    if fd is not None:
+                        _core._release_idempotency_lock(fd)
+
+            racers = [_threading.Thread(target=_race_for_new_lock) for _ in range(2)]
+            for racer in racers:
+                racer.start()
+            for racer in racers:
+                racer.join(timeout=2.0)
+            assert not [racer for racer in racers if racer.is_alive()]
+            assert race_errors == [], race_errors
+            assert race_acquired == [True, True], race_acquired
+            race_lock_path = _core._idempotency_lock_path(race_scope, "RACE")
+            assert race_lock_path.exists()
+            race_temp_leftovers = [
+                path.name
+                for path in race_lock_path.parent.iterdir()
+                if path.name.endswith(".tmp")
+            ]
+            assert race_temp_leftovers == [], race_temp_leftovers
+            results["idempotency_lock_first_create_race_safe"] = {"ok": True}
+
             held = _core._acquire_idempotency_lock(lock_scope, "LK")
             waiter_got: list[bool] = []
 
