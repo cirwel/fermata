@@ -186,6 +186,22 @@ def run_self_tests() -> dict[str, Any]:
         ).read_text(encoding="utf-8").count(committed_trace.trace_id) == 1
         results["trace_ledger_append_verified"] = trace_ledger_evidence
 
+        # A second append to a non-empty ledger must still verify via the O(1)
+        # tail read-back (the tail-offset math must land on the new record, not
+        # the prior one) and leave both records on disk.
+        second_trace = Trace(trace_id="trace_second_append")
+        second_trace.add("effect.committed", note="second")
+        second_evidence = append_trace_ledger(
+            sample_scope(root, approval_required=False), second_trace
+        )
+        assert second_evidence["verification"]["status"] == "verified"
+        ledger_after = trace_ledger_path(
+            sample_scope(root, approval_required=False)
+        ).read_text(encoding="utf-8")
+        assert ledger_after.count(committed_trace.trace_id) == 1
+        assert ledger_after.count("trace_second_append") == 1
+        results["trace_ledger_second_append_tail_verified"] = {"verified": True}
+
         old_umask = os.umask(0o444)
         try:
             restrictive_file, restrictive_file_trace = evaluate_file_write(
@@ -2047,6 +2063,78 @@ def run_self_tests() -> dict[str, Any]:
         assert idem_conflict.state == EffectState.REJECTED
         assert idem_conflict.rejection_reason == "idempotency_key_conflict"
         results["idempotency_conflict_rejected"] = {"rejected": True}
+
+        # --- Per-(scope, key) idempotency lock ---
+        import threading as _threading
+
+        import fermata.runtime_core as _core
+
+        lock_scope = sample_scope(Path(tmp) / "lock_sandbox", approval_required=False)
+        if _core.fcntl is not None:
+            held = _core._acquire_idempotency_lock(lock_scope, "LK")
+            waiter_got: list[bool] = []
+
+            def _wait_for_lock() -> None:
+                fd = _core._acquire_idempotency_lock(lock_scope, "LK")
+                waiter_got.append(True)
+                _core._release_idempotency_lock(fd)
+
+            waiter = _threading.Thread(target=_wait_for_lock)
+            waiter.start()
+            waiter.join(timeout=0.5)
+            assert waiter_got == [], (
+                "a second holder of the same (scope, key) must block"
+            )
+            _core._release_idempotency_lock(held)
+            waiter.join(timeout=2.0)
+            assert waiter_got == [True], "releasing the lock must wake the waiter"
+            results["idempotency_lock_serializes_same_key"] = {"serialized": True}
+
+            # Distinct keys never contend.
+            fd_a = _core._acquire_idempotency_lock(lock_scope, "A")
+            fd_b = _core._acquire_idempotency_lock(lock_scope, "B")
+            _core._release_idempotency_lock(fd_a)
+            _core._release_idempotency_lock(fd_b)
+            results["idempotency_lock_distinct_keys_free"] = {"ok": True}
+
+        # Concurrent same-key submissions commit exactly once: the lock makes the
+        # loser replay rather than race a second commit. Both return COMMITTED
+        # with the same effect_id, and the ledger holds one record for the key.
+        conc_scope = sample_scope(Path(tmp) / "conc_sandbox", approval_required=False)
+        start = _threading.Barrier(2)
+        conc_outcomes = []
+        conc_lock = _threading.Lock()
+
+        def _submit_same_key() -> None:
+            start.wait()
+            res, _ = evaluate_file_write(conc_scope, _keyed_file_proposal("vC\n", "CK"))
+            with conc_lock:
+                conc_outcomes.append(res)
+
+        conc_threads = [_threading.Thread(target=_submit_same_key) for _ in range(2)]
+        for thread in conc_threads:
+            thread.start()
+        for thread in conc_threads:
+            thread.join(timeout=5.0)
+        assert len(conc_outcomes) == 2
+        assert all(o.state == EffectState.COMMITTED for o in conc_outcomes), [
+            o.state for o in conc_outcomes
+        ]
+        assert conc_outcomes[0].effect_id == conc_outcomes[1].effect_id, (
+            "concurrent same-key commits must collapse to one effect"
+        )
+        conc_ledger = _core.idempotency_store_path(conc_scope).read_text(
+            encoding="utf-8"
+        )
+        conc_records = [
+            line
+            for line in conc_ledger.splitlines()
+            if '"idempotency_key": "CK"' in line
+        ]
+        assert len(conc_records) == 1, conc_records
+        results["idempotency_concurrent_same_key_commits_once"] = {
+            "records": len(conc_records)
+        }
 
         # --- Per-scope rolling-window rate budget (all governed effects) ---
         import fermata.runtime_core as rate_core

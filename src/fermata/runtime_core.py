@@ -10,6 +10,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None  # type: ignore[assignment]
+
 from fermata.runtime_ir import (
     AdapterPreparation,
     ApprovalDecision,
@@ -220,6 +225,61 @@ def idempotency_record(scope: Scope, record: dict[str, Any]) -> None:
     _append_jsonl_record(scope, idempotency_store_path(scope), record)
 
 
+def _idempotency_lock_path(scope: Scope, key: str) -> Path:
+    """Scoped lock-file path for one (scope, idempotency_key) pair."""
+
+    digest = sha256_bytes(f"{scope.scope_id}\x00{key}".encode("utf-8"))
+    return idempotency_store_path(scope).parent / "locks" / f"{digest}.lock"
+
+
+def _acquire_idempotency_lock(scope: Scope, key: str) -> int | None:
+    """Take an exclusive advisory lock for (scope, key); return the held fd.
+
+    The lock serializes the replay-check → commit → record critical section so
+    two concurrent submissions of the same key cannot both miss and both commit.
+    It is per (scope, key): distinct keys never contend. The lock file is opened
+    O_NOFOLLOW under the anchored idempotency-directory walk. Returns ``None``
+    where POSIX advisory locks are unavailable, falling back to the documented
+    serial-only guarantee. Raises ``OSError`` if the lock cannot be taken.
+    """
+
+    if fcntl is None:  # pragma: no cover - non-POSIX fallback
+        return None
+    lock_path = _idempotency_lock_path(scope, key)
+    ensure_private_directory(lock_path.parent, root=lock_path.parent.resolve())
+
+    from fermata.file_adapter import open_file_parent_fd
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = open_file_parent_fd(scope, lock_path)
+    try:
+        fd = os.open(
+            lock_path.name,
+            os.O_RDWR | os.O_CREAT | nofollow,
+            0o600,
+            dir_fd=parent_fd,
+        )
+    finally:
+        os.close(parent_fd)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    except OSError:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _release_idempotency_lock(fd: int | None) -> None:
+    """Release and close an advisory lock fd from ``_acquire_idempotency_lock``."""
+
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def rate_store_path(scope: Scope) -> Path:
     """Scoped local rate-budget ledger path (sandbox root resolved, leaf not)."""
 
@@ -401,12 +461,12 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
 
     This is explicit rather than automatic so pure interpretation remains free of
     external side effects. The ledger write is local, fsynced, and verified by
-    reading back the appended trace by ID and line hash.
+    reading back the appended bytes at the file tail (an O(1) compare, falling
+    back to a full scan only on a tail mismatch such as a concurrent append).
 
-    Local-alpha limitation: like the idempotency ledger, this file is append-only
-    and never compacted, and the read-back re-reads and re-parses the whole
-    ledger on every append (O(n) in prior traces). Acceptable for the
-    single-writer alpha; rotation or an index is future work.
+    Local-alpha limitation: the file is append-only and never compacted, so it
+    grows without bound. The append itself is no longer O(n) — verification reads
+    only the tail — but a full audit history is retained; rotation is future work.
     """
 
     ledger_path = trace_ledger_path(scope)
@@ -451,31 +511,48 @@ def append_trace_ledger(scope: Scope, trace: Trace) -> dict[str, Any]:
         except OSError:
             pass
 
+        # O(1) read-back: the record we just appended is the file's tail, so
+        # compare the last len(record_bytes) bytes to it rather than re-reading
+        # and re-parsing the whole ledger (which made each append O(n) and the
+        # ledger O(n^2) to fill). Fall back to a full scan only if the tail does
+        # not match — e.g. a concurrent append landed after ours — preserving
+        # correctness without the per-append whole-file cost.
         read_fd = os.open(ledger_name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
-        with os.fdopen(read_fd, "rb") as ledger_read:
-            ledger_text = ledger_read.read().decode("utf-8")
+        try:
+            size = os.fstat(read_fd).st_size
+            tail = os.pread(
+                read_fd, len(record_bytes), max(0, size - len(record_bytes))
+            )
+            ledger_text = (
+                None
+                if tail == record_bytes
+                else os.pread(read_fd, size, 0).decode("utf-8")
+            )
+        finally:
+            os.close(read_fd)
     finally:
         os.close(parent_fd)
 
-    matched_record: dict[str, Any] | None = None
-    for line in ledger_text.splitlines():
-        if not line.strip():
-            continue
-        # A corrupt historical line (e.g. a torn write from an earlier crash)
-        # must not break verification of the record we just appended: skip it
-        # rather than raise. Our own line is well-formed, so the match below
-        # still finds it. The read-back guarantee is "the record I wrote is on
-        # disk intact", not "every prior line is parseable".
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        line_hash = sha256_bytes((line + "\n").encode("utf-8"))
-        if parsed.get("trace_id") == trace.trace_id and line_hash == record_hash:
-            matched_record = parsed
-            break
-    if matched_record != trace_record:
-        raise ValueError("trace_ledger_read_back_mismatch")
+    if ledger_text is not None:
+        matched_record: dict[str, Any] | None = None
+        for line in ledger_text.splitlines():
+            if not line.strip():
+                continue
+            # A corrupt historical line (e.g. a torn write from an earlier crash)
+            # must not break verification of the record we just appended: skip it
+            # rather than raise. Our own line is well-formed, so the match below
+            # still finds it. The read-back guarantee is "the record I wrote is on
+            # disk intact", not "every prior line is parseable".
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            line_hash = sha256_bytes((line + "\n").encode("utf-8"))
+            if parsed.get("trace_id") == trace.trace_id and line_hash == record_hash:
+                matched_record = parsed
+                break
+        if matched_record != trace_record:
+            raise ValueError("trace_ledger_read_back_mismatch")
 
     ack = {
         "adapter": "trace_ledger",
@@ -574,6 +651,53 @@ def evaluate_with_adapter(
             intent.intent_id,
             RejectionReason.INPUT_MISSING_OR_NOT_OBJECT,
         ), trace
+
+    # Hold a per-(scope, key) lock across the entire replay-check → commit →
+    # record critical section so two concurrent submissions of the same key
+    # cannot both miss the replay check and both commit. Distinct keys (or none)
+    # never contend, and the lock is released on every return path below.
+    lock_handle = None
+    if not _stop_at_approval and intent.idempotency_key:
+        try:
+            lock_handle = _acquire_idempotency_lock(scope, intent.idempotency_key)
+        except OSError as exc:
+            return reject(
+                trace,
+                scope,
+                intent.intent_id,
+                RejectionReason.ADAPTER_COMMIT_FAILED,
+                error_type=exc.__class__.__name__,
+            ), trace
+    try:
+        return _run_committable(
+            scope,
+            proposal,
+            intent,
+            adapter,
+            trace,
+            approval=approval,
+            approval_granted=approval_granted,
+            _stop_at_approval=_stop_at_approval,
+        )
+    finally:
+        _release_idempotency_lock(lock_handle)
+
+
+def _run_committable(
+    scope: Scope,
+    proposal: Proposal,
+    intent: Intent,
+    adapter: GovernedAdapter,
+    trace: Trace,
+    *,
+    approval: ApprovalDecision | None,
+    approval_granted: bool,
+    _stop_at_approval: bool,
+) -> tuple[EffectResult, Trace]:
+    """Run the replay-check → prepare → approval → rate-budget → commit → record
+    path. Extracted from ``evaluate_with_adapter`` so the whole critical section
+    can run under a per-(scope, key) idempotency lock when a key is present.
+    """
 
     # Idempotent replay: if this scope already committed an effect under the same
     # key, return the prior committed result instead of re-running the adapter.
