@@ -1,0 +1,21 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.82,
+  "evidence": ["fixture:run-bundle-contract-v0"],
+  "intent": {
+    "adapter": "file",
+    "input": {"content": "Record-only is admitted but never committed by the runtime.\n"},
+    "intent_id": "intent_contract_file_write_record_only_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_record_only_001",
+    "required_capability": "file.write",
+    "target": "record-only-note.txt",
+    "custody_mode": "record_only"
+  },
+  "payload": {"utterance": "intend file.write target:\"record-only-note.txt\""},
+  "proposal_id": "prop_contract_file_write_record_only_001",
+  "reason": "pin record_only file.write bundle contract — admitted, not committed",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

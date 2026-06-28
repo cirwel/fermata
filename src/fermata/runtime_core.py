@@ -639,6 +639,14 @@ def evaluate_with_adapter(
         target=intent.target,
     )
 
+    # record_only custody: run the full admission pipeline but stop AT APPROVAL,
+    # committing nothing (the external actor commits). This reuses the existing
+    # stop-at-approval path, giving the IR's custody_mode a first-class runtime
+    # effect. "execute" / None proceed to commit as before.
+    if intent.custody_mode == "record_only":
+        _stop_at_approval = True
+        trace.add("custody.record_only", intent_id=intent.intent_id)
+
     if intent.adapter != adapter.adapter or intent.operation != adapter.operation:
         return reject(
             trace,
