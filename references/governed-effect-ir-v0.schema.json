@@ -27,6 +27,11 @@
       "type": "string",
       "enum": ["proposal", "intent", "admissible", "verified", "approved", "committed", "rejected", "paused"]
     },
+    "CustodyMode": {
+      "type": "string",
+      "enum": ["record_only", "execute"],
+      "description": "Explicit, up-front declaration of how the runtime handles the effect: record_only — the runtime validates and records but does NOT commit (the external actor commits; shadow/dry-run); execute — the runtime holds custody and commits. The core 8-state EffectState distinguishes these only by terminal state (reached committed or not); this names the intent BEFORE termination, so a record_only proposal is distinguishable from an execute one up front. Optional in the core IR (back-compat); a profile MAY require it."
+    },
     "Resource": {
       "type": "object",
       "required": ["kind", "target"],
@@ -141,7 +146,17 @@
         "target": { "$ref": "#/$defs/NonEmptyString" },
         "input": { "type": "object", "additionalProperties": true },
         "required_capability": { "$ref": "#/$defs/NonEmptyString" },
-        "idempotency_key": { "type": "string" }
+        "idempotency_key": { "type": "string" },
+        "custody_mode": { "$ref": "#/$defs/CustodyMode" },
+        "profile": {
+          "$ref": "#/$defs/NonEmptyString",
+          "description": "Names a downstream profile of this IR (e.g. \"unitares\"). Core stays strict; profile-specific data goes in `profile_ext`."
+        },
+        "profile_ext": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Namespaced extension data for the declared `profile` — keeps profile-specific fields out of the strict core (e.g. a UNITARES profile attaches its tier requirement / UNITARES effect_type here)."
+        }
       }
     },
     "Proposal": {
@@ -245,7 +260,10 @@
         "verification": { "$ref": "#/$defs/Verification" },
         "rejection_reason": { "type": "string" },
         "required_input": { "$ref": "#/$defs/NonEmptyString" },
-        "committed_at": { "$ref": "#/$defs/IsoTimestamp" }
+        "committed_at": { "$ref": "#/$defs/IsoTimestamp" },
+        "custody_mode": { "$ref": "#/$defs/CustodyMode" },
+        "profile": { "$ref": "#/$defs/NonEmptyString" },
+        "profile_ext": { "type": "object", "additionalProperties": true }
       },
       "allOf": [
         {
