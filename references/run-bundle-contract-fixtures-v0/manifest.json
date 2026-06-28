@@ -55,6 +55,18 @@
       "expected_memory_content": "Contract fixtures cover memory.write.\n",
       "expected_state": "committed",
       "name": "memory_write_committed"
+    },
+    {
+      "bundle": "file-write-record-only",
+      "expected_state": "approved",
+      "expected_trace_excludes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "forbidden_paths": [
+        "sandbox/record-only-note.txt"
+      ],
+      "name": "file_write_record_only"
     }
   ],
   "contract": "run-bundle-contract-v0",

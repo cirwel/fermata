@@ -1,0 +1,6 @@
+{
+  "capabilities": ["file.read", "file.write"],
+  "max_bytes": 4096,
+  "sandbox_root": "sandbox",
+  "scope_id": "contract_file_write_record_only"
+}
