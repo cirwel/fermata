@@ -145,6 +145,11 @@ class Intent:
     # the local-alpha single-writer model; multi-writer use would need a lock or
     # transactional store.
     idempotency_key: str | None = None
+    # Explicit custody declaration (IR custody_mode). "record_only" makes the
+    # runtime run the full admission pipeline but stop AT APPROVAL without
+    # committing (the external actor commits); "execute" (or None — the default)
+    # proceeds to commit. None when unset so existing intent hashes are unchanged.
+    custody_mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -346,15 +351,18 @@ def canonical_json_bytes(value: Any) -> bytes:
 def intent_sha256(intent: Intent) -> str:
     """Return the stable hash for an intent record.
 
-    A ``None`` ``idempotency_key`` is dropped before hashing so intents without
-    a key hash exactly as they did before the field existed — preserving every
-    previously issued approval binding. A set key participates in the hash, so
-    the same operation with and without a key are distinct intents.
+    A ``None`` optional field (``idempotency_key``, ``custody_mode``) is dropped
+    before hashing so intents without it hash exactly as they did before the
+    field existed — preserving every previously issued approval binding. A set
+    value participates in the hash, so the same operation with and without it
+    (e.g. record_only vs execute, or with/without a key) are distinct intents.
     """
 
     data = to_jsonable(intent)
-    if isinstance(data, dict) and data.get("idempotency_key") is None:
-        data.pop("idempotency_key", None)
+    if isinstance(data, dict):
+        for _optional in ("idempotency_key", "custody_mode"):
+            if data.get(_optional) is None:
+                data.pop(_optional, None)
     return sha256_bytes(
         json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
     )

@@ -14,7 +14,7 @@ from typing import Any
 
 
 CONTRACT_ROOT = "references/run-bundle-contract-fixtures-v0"
-EFFECT_STATES = frozenset({"paused", "rejected", "committed"})
+EFFECT_STATES = frozenset({"paused", "rejected", "committed", "approved"})
 
 
 def repo_root() -> Path:

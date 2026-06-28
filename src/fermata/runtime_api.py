@@ -127,6 +127,17 @@ def _optional_idempotency_key(record: JsonObject) -> str | None:
     return value
 
 
+def _optional_custody_mode(record: JsonObject) -> str | None:
+    value = record.get("custody_mode")
+    if value is None:
+        return None
+    if value not in {"record_only", "execute"}:
+        raise RuntimeApiError(
+            "intent.custody_mode must be 'record_only' or 'execute' when present"
+        )
+    return value
+
+
 def intent_from_record(record: JsonObject) -> Intent:
     """Lower a canonical intent record into the runtime dataclass."""
 
@@ -144,6 +155,7 @@ def intent_from_record(record: JsonObject) -> Intent:
             label="intent",
         ),
         idempotency_key=_optional_idempotency_key(record),
+        custody_mode=_optional_custody_mode(record),
     )
 
 
