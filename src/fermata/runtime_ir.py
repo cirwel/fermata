@@ -115,12 +115,19 @@ class Scope:
     # ``max_effects_per_window`` is > 0, the runtime commits at most that many
     # effects per scope within any trailing ``rate_window_seconds`` window;
     # the next committable effect is rejected ``scope_rate_limit_exceeded``.
-    # 0 (the default) means no budget is enforced. Counts only committed
-    # effects — rejected, paused, and idempotent-replayed proposals do not
-    # consume budget. Enforced at-most-N for SERIAL callers (the same
-    # single-writer caveat as ``idempotency_key``).
+    # 0 (the default) means no budget is enforced. Counts every effect the
+    # runtime authorizes: committed effects, and record_only effects, which the
+    # runtime does not perform but whose external actor does. Rejected, paused,
+    # idempotent-replayed and dry-run proposals do not consume budget.
+    # Enforced at-most-N for SERIAL callers (the same single-writer caveat as
+    # ``idempotency_key``).
     max_effects_per_window: int = 0
     rate_window_seconds: float = 0.0
+
+
+# The IR's CustodyMode enum, mirrored from governed-effect-ir-v0.schema.json so
+# the runtime and the API boundary constrain the field from one definition.
+CUSTODY_MODES = frozenset({"record_only", "execute"})
 
 
 @dataclass(frozen=True)
@@ -241,6 +248,12 @@ class EffectResult:
     rejection_reason: str | None = None
     required_input: str | None = None
     committed_at: str | None = None
+    # The custody the intent declared, echoed onto the durable record. Without
+    # it an approved effect that stopped because custody said record_only is
+    # byte-identical to one that stopped for any other reason, and an operator
+    # auditing effect.json cannot tell which. The IR reserves the field on
+    # EffectRecord; this is what fills it.
+    custody_mode: str | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Return the canonical JSON-Schema effect record."""
@@ -261,6 +274,7 @@ class EffectResult:
             "rejection_reason": self.rejection_reason,
             "required_input": self.required_input,
             "committed_at": self.committed_at,
+            "custody_mode": self.custody_mode,
         }
         for key, value in optional_fields.items():
             if value is not None:

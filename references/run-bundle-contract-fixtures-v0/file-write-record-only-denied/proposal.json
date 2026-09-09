@@ -1,0 +1,27 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.82,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "custody_mode": "record_only",
+    "input": {
+      "content": "Denied record-only custody must not read as honored.\n"
+    },
+    "intent_id": "intent_contract_file_write_record_only_denied_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_record_only_denied_001",
+    "required_capability": "file.write",
+    "target": "record-only-denied-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"record-only-denied-note.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_record_only_denied_001",
+  "reason": "pin the record_only denial path: declared, never honored",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

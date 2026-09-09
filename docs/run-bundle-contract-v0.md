@@ -101,7 +101,7 @@ approval record **bound to the bundle's scope and intent hash**, then re-runs
 the bundle so `effect.json` / `trace.json` reflect the outcome:
 
 - `--yes` records an `approved` decision; an admissible effect becomes
-  `committed`.
+  `committed`, or `approved` when the intent declared `record_only` custody.
 - `--deny` records a `denied` decision; the effect becomes `rejected` with
   `rejection_reason: "approval_denied"` and no side effect is committed.
 - `--render-only` prints a plain-English summary and the pending effect without
@@ -125,6 +125,27 @@ With no required approval, or with valid `approval.json`:
 - an admissible effect may become `committed`;
 - committed effects include adapter `acknowledgement`, `verification`, and
   `committed_at`.
+
+With `intent.custody_mode` set to `record_only`:
+
+- `effect.state` is `approved`;
+- `effect.custody_mode` is `record_only`;
+- `custody.declared` is present in the trace, and `custody.record_only` is
+  present only when admission and approval actually cleared;
+- `adapter.commit.started` and `effect.committed` are absent from the trace;
+- `acknowledgement`, `verification`, and `committed_at` are absent from the
+  effect;
+- external side effects are not committed **by fermata**. Record-only custody
+  declares that an external actor performs the effect, so approving one
+  authorizes an effect fermata will not carry out and cannot verify.
+
+Record-only custody is a declaration about who commits, not an exemption from
+governance. Capability checks, policy gates, the approval requirement, the
+idempotency conflict check, and the scope rate budget all apply exactly as they
+do to a committing effect. Only the adapter commit is skipped.
+
+With `intent.custody_mode` set to `execute`, the outcome is the committing path
+above, and `effect.custody_mode` is `execute`.
 
 With malformed or out-of-scope input:
 

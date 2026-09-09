@@ -74,8 +74,30 @@ For local alpha, the public dispatcher supports:
 Expected outcomes:
 
 - `committed` only after adapter acknowledgement and runtime verification;
+- `approved` when the intent declared `record_only` custody and cleared every
+  check without committing;
 - `paused` when approval is required and absent;
 - `rejected` when a denial path is reached.
+
+### Declared custody
+
+`intent.custody_mode` names who performs the effect, before the run terminates.
+
+- `execute`, or the field unset, is the committing path above.
+- `record_only` runs the whole governed pipeline and stops before the adapter
+  commit. An external actor performs the effect.
+
+`record_only` reaches `approved` rather than `committed`, and every terminal
+result carries `effect.custody_mode` so an auditor reading the record can tell
+which custody produced it. Under `run`, an `approved` outcome therefore means
+one of two different things, distinguished by that field: a `record_only` effect
+that cleared every check, or a dry run that was never going to commit.
+
+Record-only custody skips the commit and nothing else. The idempotency conflict
+check and the scope rate budget both apply, because the effect still reaches the
+world. What it does **not** get is an idempotency record: fermata records no
+completed effect for a commit it did not perform, so retry-replay is the
+external actor's responsibility, not the runtime's.
 
 Committed outputs include:
 

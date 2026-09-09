@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from fermata.network_adapter import (
     sample_network_proposal,
     sample_network_scope,
 )
+from fermata.runtime_api import RuntimeApiError, intent_from_record
 from fermata.runtime_core import (
     append_trace_ledger,
     rate_count_recent,
@@ -2123,17 +2125,110 @@ def run_self_tests() -> dict[str, Any]:
             _custody_file_proposal("execute", "custody-hash.txt").intent
         )
         assert len({unset_hash, record_only_hash, execute_hash}) == 3
-        legacy_intent = Intent(
-            intent_id="intent_custody_001",
-            proposal_id="prop_custody_001",
-            adapter="file",
-            operation="write",
-            target="custody-hash.txt",
-            input={"content": "custody\n"},
-            required_capability="file.write",
+
+        # The back-compat check has to compare against a value computed WITHOUT
+        # the current code. Building a "legacy" Intent from the current
+        # dataclass and hashing it with the current function proves nothing:
+        # both sides would move together if the exclusion were deleted. This is
+        # the digest of that intent as the pre-custody_mode encoder produced it,
+        # frozen as a literal so it cannot drift with the implementation.
+        frozen_pre_custody_digest = (
+            "49ca6cfdd97d879a4e11eefa91819390746a3c791b2ff1818aa4e21429e1c7e4"
         )
-        assert intent_sha256(legacy_intent) == unset_hash
-        results["custody_hash_backcompat"] = {"unset_matches_legacy": True}
+        assert unset_hash == frozen_pre_custody_digest
+        results["custody_hash_backcompat"] = {
+            "unset_matches_frozen_pre_field_digest": True
+        }
+
+        # record_only is not a dry run, so it must not inherit the dry-run
+        # waivers. Reusing a key with a different intent stays a conflict.
+        keyed_scope = sample_scope(Path(tmp) / "custody_key", approval_required=False)
+
+        def _keyed_custody_proposal(mode: str, content: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_key_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="declared custody with a retry key",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_key_001",
+                    proposal_id="prop_custody_key_001",
+                    adapter="file",
+                    operation="write",
+                    target="custody-keyed.txt",
+                    input={"content": content},
+                    required_capability="file.write",
+                    custody_mode=mode,
+                    idempotency_key="CUSTODY_K1",
+                ),
+            )
+
+        keyed_execute, _ = evaluate_file_write(
+            keyed_scope, _keyed_custody_proposal("execute", "v1\n")
+        )
+        assert keyed_execute.state == EffectState.COMMITTED
+        keyed_conflict, _ = evaluate_file_write(
+            keyed_scope, _keyed_custody_proposal("record_only", "DIFFERENT\n")
+        )
+        assert keyed_conflict.state == EffectState.REJECTED
+        assert keyed_conflict.rejection_reason == "idempotency_key_conflict"
+        results["custody_record_only_honors_idempotency"] = {"conflict_detected": True}
+
+        # A record_only approval is external reach, so it consumes the scope's
+        # rate budget. Before this was separated from the dry-run flag,
+        # record_only returned before the budget check and consumed nothing.
+        budget_scope = replace(
+            sample_scope(Path(tmp) / "custody_budget", approval_required=False),
+            max_effects_per_window=2,
+            rate_window_seconds=3600.0,
+        )
+        budget_states = []
+        for index in range(3):
+            budget_effect, _ = evaluate_file_write(
+                budget_scope,
+                _custody_file_proposal("record_only", f"custody-budget-{index}.txt"),
+            )
+            budget_states.append(budget_effect.state)
+        assert budget_states[0] == EffectState.APPROVED
+        assert budget_states[1] == EffectState.APPROVED
+        assert budget_states[2] == EffectState.REJECTED
+        results["custody_record_only_consumes_rate_budget"] = {
+            "refused_at_cap": True
+        }
+
+        # The durable record must say which custody produced it, on the denial
+        # path too — otherwise an audit cannot tell a record_only result from
+        # any other run that stopped early.
+        assert record_only_effect.custody_mode == "record_only"
+        assert execute_effect.custody_mode == "execute"
+        assert keyed_conflict.custody_mode == "record_only"
+        for stamped in (record_only_effect, execute_effect, keyed_conflict):
+            assert stamped.to_record()["custody_mode"] == stamped.custody_mode
+        results["custody_mode_on_effect_record"] = {"stamped": True}
+
+        # A malformed custody value must produce the handled API error, not a
+        # TypeError escaping through the CLI. A set membership test alone raises
+        # on an unhashable JSON value.
+        custody_record_base = {
+            "intent_id": "i",
+            "proposal_id": "p",
+            "adapter": "file",
+            "operation": "write",
+            "target": "t.txt",
+            "input": {"content": "x"},
+            "required_capability": "file.write",
+        }
+        for malformed in ([], {}, 5, ""):
+            try:
+                intent_from_record({**custody_record_base, "custody_mode": malformed})
+            except RuntimeApiError:
+                continue
+            raise AssertionError(
+                f"malformed custody_mode {malformed!r} was not rejected"
+            )
+        results["custody_malformed_rejected"] = {"rejected": True}
 
         # --- Per-(scope, key) idempotency lock ---
         import threading as _threading

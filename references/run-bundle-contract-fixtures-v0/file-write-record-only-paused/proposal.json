@@ -1,0 +1,27 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.82,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "custody_mode": "record_only",
+    "input": {
+      "content": "Record-only custody still pauses for approval.\n"
+    },
+    "intent_id": "intent_contract_file_write_record_only_paused_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_record_only_paused_001",
+    "required_capability": "file.write",
+    "target": "record-only-paused-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"record-only-paused-note.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_record_only_paused_001",
+  "reason": "pin that record_only does not bypass an approval gate",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}
