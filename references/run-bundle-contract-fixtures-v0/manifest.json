@@ -63,10 +63,27 @@
         "adapter.commit.started",
         "effect.committed"
       ],
+      "expected_trace_includes": [
+        "custody.record_only"
+      ],
       "forbidden_paths": [
         "sandbox/record-only-note.txt"
       ],
       "name": "file_write_record_only"
+    },
+    {
+      "bundle": "file-write-execute",
+      "expected_ack_adapter": "file",
+      "expected_state": "committed",
+      "expected_target_content": {
+        "content": "Execute custody commits through the governed adapter.\n",
+        "path": "sandbox/execute-note.txt"
+      },
+      "expected_trace_includes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "name": "file_write_execute"
     }
   ],
   "contract": "run-bundle-contract-v0",

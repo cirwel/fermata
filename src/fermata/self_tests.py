@@ -2064,6 +2064,77 @@ def run_self_tests() -> dict[str, Any]:
         assert idem_conflict.rejection_reason == "idempotency_key_conflict"
         results["idempotency_conflict_rejected"] = {"rejected": True}
 
+        # --- Declared custody (IR custody_mode) ---
+        def _custody_file_proposal(mode: str | None, target: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="declared custody governed write",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_001",
+                    proposal_id="prop_custody_001",
+                    adapter="file",
+                    operation="write",
+                    target=target,
+                    input={"content": "custody\n"},
+                    required_capability="file.write",
+                    custody_mode=mode,
+                ),
+            )
+
+        custody_scope = sample_scope(
+            Path(tmp) / "custody_sandbox", approval_required=False
+        )
+
+        # record_only runs the full admission pipeline and stops at approval:
+        # the effect is admissible and approved, but nothing is committed and no
+        # bytes reach the sandbox. The external actor owns the commit.
+        record_only_effect, record_only_trace = evaluate_file_write(
+            custody_scope, _custody_file_proposal("record_only", "custody-record.txt")
+        )
+        assert record_only_effect.state == EffectState.APPROVED
+        record_only_events = [event["type"] for event in record_only_trace.events]
+        assert "custody.record_only" in record_only_events
+        assert "adapter.commit.started" not in record_only_events
+        assert not (custody_scope.sandbox_root / "custody-record.txt").exists()
+        results["custody_record_only_never_commits"] = record_only_effect.to_record()
+
+        # execute is the declared-commit counterpart on the same scope.
+        execute_effect, _ = evaluate_file_write(
+            custody_scope, _custody_file_proposal("execute", "custody-execute.txt")
+        )
+        assert execute_effect.state == EffectState.COMMITTED
+        assert (
+            custody_scope.sandbox_root / "custody-execute.txt"
+        ).read_text(encoding="utf-8") == "custody\n"
+        results["custody_execute_commits"] = {"committed": True}
+
+        # An unset custody_mode must hash exactly as it did before the field
+        # existed, or every previously issued approval binding breaks. A set
+        # value participates, so the three declarations are distinct intents.
+        unset_hash = intent_sha256(_custody_file_proposal(None, "custody-hash.txt").intent)
+        record_only_hash = intent_sha256(
+            _custody_file_proposal("record_only", "custody-hash.txt").intent
+        )
+        execute_hash = intent_sha256(
+            _custody_file_proposal("execute", "custody-hash.txt").intent
+        )
+        assert len({unset_hash, record_only_hash, execute_hash}) == 3
+        legacy_intent = Intent(
+            intent_id="intent_custody_001",
+            proposal_id="prop_custody_001",
+            adapter="file",
+            operation="write",
+            target="custody-hash.txt",
+            input={"content": "custody\n"},
+            required_capability="file.write",
+        )
+        assert intent_sha256(legacy_intent) == unset_hash
+        results["custody_hash_backcompat"] = {"unset_matches_legacy": True}
+
         # --- Per-(scope, key) idempotency lock ---
         import threading as _threading
 

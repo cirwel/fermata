@@ -1,0 +1,27 @@
+{
+  "actor": "agent:contract-fixture",
+  "confidence": 0.82,
+  "evidence": [
+    "fixture:run-bundle-contract-v0"
+  ],
+  "intent": {
+    "adapter": "file",
+    "custody_mode": "execute",
+    "input": {
+      "content": "Execute custody commits through the governed adapter.\n"
+    },
+    "intent_id": "intent_contract_file_write_execute_001",
+    "operation": "write",
+    "proposal_id": "prop_contract_file_write_execute_001",
+    "required_capability": "file.write",
+    "target": "execute-note.txt"
+  },
+  "payload": {
+    "utterance": "intend file.write target:\"execute-note.txt\""
+  },
+  "proposal_id": "prop_contract_file_write_execute_001",
+  "reason": "pin execute custody file.write bundle contract: declared execute still commits",
+  "record_type": "proposal",
+  "schema_version": "0.1",
+  "speech_act": "intend"
+}

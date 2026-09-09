@@ -194,12 +194,23 @@ def assert_state_contract(case: dict[str, Any], output: dict[str, Any]) -> None:
         if acknowledgement["adapter"] != case.get("expected_ack_adapter"):
             raise AssertionError(f"{case['name']}: acknowledgement adapter mismatch")
 
-    excluded = set(case.get("expected_trace_excludes", []))
     present = event_types(output["trace"])
+
+    excluded = set(case.get("expected_trace_excludes", []))
     unexpected = sorted(excluded & present)
     if unexpected:
         raise AssertionError(
             f"{case['name']}: trace unexpectedly contained {', '.join(unexpected)}"
+        )
+
+    # Positive trace evidence. Absence assertions alone cannot tell "the runtime
+    # honored the declared custody" from "the run stopped early for an unrelated
+    # reason", so a fixture may name the events that must be present.
+    included = set(case.get("expected_trace_includes", []))
+    absent = sorted(included - present)
+    if absent:
+        raise AssertionError(
+            f"{case['name']}: trace missing required event(s): {', '.join(absent)}"
         )
 
 
