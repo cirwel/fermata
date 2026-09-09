@@ -165,11 +165,26 @@ def render_pending_approval(proposal: Proposal, scope: Scope) -> str:
     assert intent is not None  # guaranteed by read_pending_approval
     content = intent.input.get("content") if isinstance(intent.input, dict) else None
     size = f"{len(content)} bytes" if isinstance(content, str) else "no content"
+    # Custody has to appear here or the sentence is false. Under record_only the
+    # runtime will not perform this effect at all, and an approver told only
+    # that an agent "wants to write" a file would be authorizing something other
+    # than what happens: an outside actor performing the write, outside this
+    # approval's audit trail.
+    if intent.custody_mode == "record_only":
+        custody = (
+            " Custody: record only, so approving authorizes an external actor "
+            "to perform this effect. Fermata will record the approval and "
+            "commit nothing itself."
+        )
+    elif intent.custody_mode == "execute":
+        custody = " Custody: execute, so fermata commits this effect itself."
+    else:
+        custody = ""
     return (
         f"{proposal.actor} wants to {intent.operation} "
         f"{intent.adapter}:{intent.target} ({size}) "
         f"under scope {scope.scope_id!r}, which requires your approval. "
-        f"Capability: {intent.required_capability}."
+        f"Capability: {intent.required_capability}.{custody}"
     )
 
 

@@ -55,6 +55,23 @@ file, memory, and network alike — and refuses the next one as
 `scope_rate_limit_exceeded`. A scope's cumulative external reach is bounded, not
 just each individual effect.
 
+An intent may also declare **who commits**. `custody_mode: "execute"` is the
+committing path above. `custody_mode: "record_only"` says an external actor will
+perform the effect: the runtime runs the whole governed pipeline, stops before
+the adapter commit, and returns an `approved` effect that carries the declared
+custody on the record. This is a declaration about custody, not an exemption
+from governance — capability checks, approval gates and the scope rate budget
+all still apply, because the effect still reaches the world. What the runtime
+will not do is claim to have verified an effect it never performed.
+
+Retry-safety is the one guarantee record-only cannot give in full, and the limit
+is worth stating plainly. A record-only proposal is still checked against a key
+already used by a **committed** effect, so it cannot conflict with or silently
+replace something fermata performed. But fermata records nothing for a commit it
+did not perform, so two record-only proposals carrying the same key are not
+deduplicated against each other. At-most-once for the external effect belongs to
+whoever performs it.
+
 ## Current Release State
 
 Fermata has a published local-alpha prerelease:

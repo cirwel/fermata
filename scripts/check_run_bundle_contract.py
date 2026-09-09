@@ -14,7 +14,7 @@ from typing import Any
 
 
 CONTRACT_ROOT = "references/run-bundle-contract-fixtures-v0"
-EFFECT_STATES = frozenset({"paused", "rejected", "committed"})
+EFFECT_STATES = frozenset({"paused", "rejected", "committed", "approved"})
 
 
 def repo_root() -> Path:
@@ -172,6 +172,49 @@ def assert_state_contract(case: dict[str, Any], output: dict[str, Any]) -> None:
         if "acknowledgement" in effect or "committed_at" in effect:
             raise AssertionError(f"{case['name']}: rejected effect committed evidence")
 
+    if expected_state == "approved":
+        # The state exists to say "admission and approval cleared, and nothing
+        # was committed". Both halves need asserting: approval evidence must be
+        # present, commit evidence must be absent. Without this an approved
+        # effect carrying acknowledgement/committed_at would pass, which is the
+        # exact contradiction the record_only fixture exists to catch.
+        require_keys(
+            effect,
+            {"intent_id", "approval"},
+            label=f"{case['name']} approved effect",
+        )
+        approval = effect["approval"]
+        if not isinstance(approval, dict):
+            raise AssertionError(f"{case['name']}: approval must be object")
+        # The gate must have been cleared, either by a recorded decision or by a
+        # scope that does not require one. "requested" or "denied" here would
+        # mean the run stopped before approval, not after it.
+        cleared = {"approved", "not_required"}
+        if approval.get("status") not in cleared:
+            raise AssertionError(
+                f"{case['name']}: approved effect approval status "
+                f"{approval.get('status')!r} not in {sorted(cleared)}"
+            )
+        expected_approval = case.get("expected_approval_status")
+        if expected_approval is not None and approval.get("status") != expected_approval:
+            raise AssertionError(
+                f"{case['name']}: approval status {approval.get('status')!r} "
+                f"!= {expected_approval!r}"
+            )
+        for forbidden in ("acknowledgement", "verification", "committed_at"):
+            if forbidden in effect:
+                raise AssertionError(
+                    f"{case['name']}: approved effect carries commit evidence "
+                    f"({forbidden})"
+                )
+
+    expected_custody = case.get("expected_custody_mode")
+    if expected_custody is not None and effect.get("custody_mode") != expected_custody:
+        raise AssertionError(
+            f"{case['name']}: custody_mode {effect.get('custody_mode')!r} "
+            f"!= {expected_custody!r}"
+        )
+
     if expected_state == "committed":
         require_keys(
             effect,
@@ -194,12 +237,23 @@ def assert_state_contract(case: dict[str, Any], output: dict[str, Any]) -> None:
         if acknowledgement["adapter"] != case.get("expected_ack_adapter"):
             raise AssertionError(f"{case['name']}: acknowledgement adapter mismatch")
 
-    excluded = set(case.get("expected_trace_excludes", []))
     present = event_types(output["trace"])
+
+    excluded = set(case.get("expected_trace_excludes", []))
     unexpected = sorted(excluded & present)
     if unexpected:
         raise AssertionError(
             f"{case['name']}: trace unexpectedly contained {', '.join(unexpected)}"
+        )
+
+    # Positive trace evidence. Absence assertions alone cannot tell "the runtime
+    # honored the declared custody" from "the run stopped early for an unrelated
+    # reason", so a fixture may name the events that must be present.
+    included = set(case.get("expected_trace_includes", []))
+    absent = sorted(included - present)
+    if absent:
+        raise AssertionError(
+            f"{case['name']}: trace missing required event(s): {', '.join(absent)}"
         )
 
 

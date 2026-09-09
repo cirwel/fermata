@@ -55,6 +55,73 @@
       "expected_memory_content": "Contract fixtures cover memory.write.\n",
       "expected_state": "committed",
       "name": "memory_write_committed"
+    },
+    {
+      "bundle": "file-write-record-only",
+      "expected_custody_mode": "record_only",
+      "expected_state": "approved",
+      "expected_trace_excludes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "expected_trace_includes": [
+        "custody.record_only"
+      ],
+      "forbidden_paths": [
+        "sandbox/record-only-note.txt"
+      ],
+      "name": "file_write_record_only"
+    },
+    {
+      "bundle": "file-write-execute",
+      "expected_ack_adapter": "file",
+      "expected_custody_mode": "execute",
+      "expected_state": "committed",
+      "expected_target_content": {
+        "content": "Execute custody commits through the governed adapter.\n",
+        "path": "sandbox/execute-note.txt"
+      },
+      "expected_trace_includes": [
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "name": "file_write_execute"
+    },
+    {
+      "bundle": "file-write-record-only-denied",
+      "expected_custody_mode": "record_only",
+      "expected_reason": "missing_capability",
+      "expected_state": "rejected",
+      "expected_trace_excludes": [
+        "custody.record_only",
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "expected_trace_includes": [
+        "custody.declared"
+      ],
+      "forbidden_paths": [
+        "sandbox/record-only-denied-note.txt"
+      ],
+      "name": "file_write_record_only_denied"
+    },
+    {
+      "bundle": "file-write-record-only-paused",
+      "expected_custody_mode": "record_only",
+      "expected_required_input": "approval_decision",
+      "expected_state": "paused",
+      "expected_trace_excludes": [
+        "custody.record_only",
+        "adapter.commit.started",
+        "effect.committed"
+      ],
+      "expected_trace_includes": [
+        "custody.declared"
+      ],
+      "forbidden_paths": [
+        "sandbox/record-only-paused-note.txt"
+      ],
+      "name": "file_write_record_only_paused"
     }
   ],
   "contract": "run-bundle-contract-v0",

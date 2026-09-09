@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +28,10 @@ from fermata.network_adapter import (
     sample_network_proposal,
     sample_network_scope,
 )
+from fermata.runtime_api import RuntimeApiError, intent_from_record
 from fermata.runtime_core import (
     append_trace_ledger,
+    idempotency_lookup,
     rate_count_recent,
     rate_store_path,
     trace_ledger_path,
@@ -2063,6 +2066,260 @@ def run_self_tests() -> dict[str, Any]:
         assert idem_conflict.state == EffectState.REJECTED
         assert idem_conflict.rejection_reason == "idempotency_key_conflict"
         results["idempotency_conflict_rejected"] = {"rejected": True}
+
+        # --- Declared custody (IR custody_mode) ---
+        def _custody_file_proposal(mode: str | None, target: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="declared custody governed write",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_001",
+                    proposal_id="prop_custody_001",
+                    adapter="file",
+                    operation="write",
+                    target=target,
+                    input={"content": "custody\n"},
+                    required_capability="file.write",
+                    custody_mode=mode,
+                ),
+            )
+
+        custody_scope = sample_scope(
+            Path(tmp) / "custody_sandbox", approval_required=False
+        )
+
+        # record_only runs the full admission pipeline and stops at approval:
+        # the effect is admissible and approved, but nothing is committed and no
+        # bytes reach the sandbox. The external actor owns the commit.
+        record_only_effect, record_only_trace = evaluate_file_write(
+            custody_scope, _custody_file_proposal("record_only", "custody-record.txt")
+        )
+        assert record_only_effect.state == EffectState.APPROVED
+        record_only_events = [event["type"] for event in record_only_trace.events]
+        assert "custody.record_only" in record_only_events
+        assert "adapter.commit.started" not in record_only_events
+        assert not (custody_scope.sandbox_root / "custody-record.txt").exists()
+        results["custody_record_only_never_commits"] = record_only_effect.to_record()
+
+        # execute is the declared-commit counterpart on the same scope.
+        execute_effect, _ = evaluate_file_write(
+            custody_scope, _custody_file_proposal("execute", "custody-execute.txt")
+        )
+        assert execute_effect.state == EffectState.COMMITTED
+        assert (
+            custody_scope.sandbox_root / "custody-execute.txt"
+        ).read_text(encoding="utf-8") == "custody\n"
+        results["custody_execute_commits"] = {"committed": True}
+
+        # An unset custody_mode must hash exactly as it did before the field
+        # existed, or every previously issued approval binding breaks. A set
+        # value participates, so the three declarations are distinct intents.
+        unset_hash = intent_sha256(_custody_file_proposal(None, "custody-hash.txt").intent)
+        record_only_hash = intent_sha256(
+            _custody_file_proposal("record_only", "custody-hash.txt").intent
+        )
+        execute_hash = intent_sha256(
+            _custody_file_proposal("execute", "custody-hash.txt").intent
+        )
+        assert len({unset_hash, record_only_hash, execute_hash}) == 3
+
+        # The back-compat check has to compare against a value computed WITHOUT
+        # the current code. Building a "legacy" Intent from the current
+        # dataclass and hashing it with the current function proves nothing:
+        # both sides would move together if the exclusion were deleted. This is
+        # the digest of that intent as the pre-custody_mode encoder produced it,
+        # frozen as a literal so it cannot drift with the implementation.
+        frozen_pre_custody_digest = (
+            "49ca6cfdd97d879a4e11eefa91819390746a3c791b2ff1818aa4e21429e1c7e4"
+        )
+        assert unset_hash == frozen_pre_custody_digest
+        results["custody_hash_backcompat"] = {
+            "unset_matches_frozen_pre_field_digest": True
+        }
+
+        # record_only is not a dry run, so it must not inherit the dry-run
+        # waivers. Reusing a key with a different intent stays a conflict.
+        keyed_scope = sample_scope(Path(tmp) / "custody_key", approval_required=False)
+
+        def _keyed_custody_proposal(mode: str, content: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_key_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="declared custody with a retry key",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_key_001",
+                    proposal_id="prop_custody_key_001",
+                    adapter="file",
+                    operation="write",
+                    target="custody-keyed.txt",
+                    input={"content": content},
+                    required_capability="file.write",
+                    custody_mode=mode,
+                    idempotency_key="CUSTODY_K1",
+                ),
+            )
+
+        keyed_execute, _ = evaluate_file_write(
+            keyed_scope, _keyed_custody_proposal("execute", "v1\n")
+        )
+        assert keyed_execute.state == EffectState.COMMITTED
+        keyed_conflict, _ = evaluate_file_write(
+            keyed_scope, _keyed_custody_proposal("record_only", "DIFFERENT\n")
+        )
+        assert keyed_conflict.state == EffectState.REJECTED
+        assert keyed_conflict.rejection_reason == "idempotency_key_conflict"
+        results["custody_record_only_honors_idempotency"] = {"conflict_detected": True}
+
+        # The other half of that boundary, pinned so it cannot drift silently.
+        # record_only writes no idempotency record, so two record_only proposals
+        # carrying the same key do NOT conflict with each other even when their
+        # intents differ. This is a documented limit, not a bug: fermata cannot
+        # deduplicate a commit it never performs. If a future change makes these
+        # conflict, the guarantee in docs/runtime-api-v0.md has moved and must
+        # be rewritten with it.
+        pair_scope = sample_scope(Path(tmp) / "custody_pair", approval_required=False)
+
+        def _pair_proposal(content: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_pair_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="two record_only proposals under one key",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_pair_001",
+                    proposal_id="prop_custody_pair_001",
+                    adapter="file",
+                    operation="write",
+                    target="custody-pair.txt",
+                    input={"content": content},
+                    required_capability="file.write",
+                    custody_mode="record_only",
+                    idempotency_key="CUSTODY_PAIR",
+                ),
+            )
+
+        pair_first, _ = evaluate_file_write(pair_scope, _pair_proposal("v1\n"))
+        pair_second, _ = evaluate_file_write(pair_scope, _pair_proposal("DIFFERENT\n"))
+        assert pair_first.state == EffectState.APPROVED
+        assert pair_second.state == EffectState.APPROVED
+        assert pair_second.rejection_reason is None
+        results["custody_record_only_pair_not_deduplicated"] = {
+            "documented_limit": "record_only leaves no record to conflict against"
+        }
+
+        # The durable idempotency ledger copy must carry custody too. Stamping
+        # the returned object is not enough: the commit path serializes the
+        # record into the ledger before the caller ever sees it, so a post-hoc
+        # stamp leaves the persisted copy blank.
+        ledger_scope = sample_scope(
+            Path(tmp) / "custody_ledger", approval_required=False
+        )
+        ledger_committed, _ = evaluate_file_write(
+            ledger_scope, _keyed_custody_proposal("execute", "ledger\n")
+        )
+        assert ledger_committed.state == EffectState.COMMITTED
+        ledger_prior = idempotency_lookup(ledger_scope, "CUSTODY_K1")
+        assert ledger_prior is not None
+        assert ledger_prior["effect"]["custody_mode"] == "execute"
+        results["custody_mode_in_idempotency_ledger"] = {"persisted": True}
+
+        # custody_mode is a DECLARATION, not an authorization. A dry run of a
+        # record_only intent carries the same field and the same approved state,
+        # and — being effect-free — is exempt from the rate budget, so at an
+        # exhausted budget the dry run still reports approved where the real run
+        # is refused. Only the terminal custody.record_only event separates
+        # them, and only the real path emits it. An external actor that read the
+        # field alone would act on a simulation.
+        exhausted_scope = replace(
+            sample_scope(Path(tmp) / "custody_dryrun", approval_required=False),
+            max_effects_per_window=1,
+            rate_window_seconds=3600.0,
+        )
+        first_real, first_trace = evaluate_file_write(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-1.txt")
+        )
+        assert first_real.state == EffectState.APPROVED
+        assert "custody.record_only" in [e["type"] for e in first_trace.events]
+        refused_real, _ = evaluate_file_write(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-2.txt")
+        )
+        assert refused_real.state == EffectState.REJECTED
+        assert refused_real.rejection_reason == "scope_rate_limit_exceeded"
+        dry_effect, dry_trace = interpret(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-3.txt")
+        )
+        dry_events = [event["type"] for event in dry_trace.events]
+        assert dry_effect.state == EffectState.APPROVED
+        assert dry_effect.custody_mode == "record_only"
+        assert "custody.record_only" not in dry_events
+        assert "custody.declared" in dry_events
+        results["custody_dry_run_is_not_authorization"] = {
+            "field_shared": True,
+            "terminal_event_absent_in_dry_run": True,
+        }
+
+        # A record_only approval is external reach, so it consumes the scope's
+        # rate budget. Before this was separated from the dry-run flag,
+        # record_only returned before the budget check and consumed nothing.
+        budget_scope = replace(
+            sample_scope(Path(tmp) / "custody_budget", approval_required=False),
+            max_effects_per_window=2,
+            rate_window_seconds=3600.0,
+        )
+        budget_states = []
+        for index in range(3):
+            budget_effect, _ = evaluate_file_write(
+                budget_scope,
+                _custody_file_proposal("record_only", f"custody-budget-{index}.txt"),
+            )
+            budget_states.append(budget_effect.state)
+        assert budget_states[0] == EffectState.APPROVED
+        assert budget_states[1] == EffectState.APPROVED
+        assert budget_states[2] == EffectState.REJECTED
+        results["custody_record_only_consumes_rate_budget"] = {
+            "refused_at_cap": True
+        }
+
+        # The durable record must say which custody produced it, on the denial
+        # path too — otherwise an audit cannot tell a record_only result from
+        # any other run that stopped early.
+        assert record_only_effect.custody_mode == "record_only"
+        assert execute_effect.custody_mode == "execute"
+        assert keyed_conflict.custody_mode == "record_only"
+        for stamped in (record_only_effect, execute_effect, keyed_conflict):
+            assert stamped.to_record()["custody_mode"] == stamped.custody_mode
+        results["custody_mode_on_effect_record"] = {"stamped": True}
+
+        # A malformed custody value must produce the handled API error, not a
+        # TypeError escaping through the CLI. A set membership test alone raises
+        # on an unhashable JSON value.
+        custody_record_base = {
+            "intent_id": "i",
+            "proposal_id": "p",
+            "adapter": "file",
+            "operation": "write",
+            "target": "t.txt",
+            "input": {"content": "x"},
+            "required_capability": "file.write",
+        }
+        for malformed in ([], {}, 5, ""):
+            try:
+                intent_from_record({**custody_record_base, "custody_mode": malformed})
+            except RuntimeApiError:
+                continue
+            raise AssertionError(
+                f"malformed custody_mode {malformed!r} was not rejected"
+            )
+        results["custody_malformed_rejected"] = {"rejected": True}
 
         # --- Per-(scope, key) idempotency lock ---
         import threading as _threading

@@ -14,6 +14,7 @@ from fermata.interpreter import interpret as interpret_effect
 from fermata.memory_adapter import evaluate_memory_write
 from fermata.network_adapter import evaluate_network_fetch
 from fermata.runtime_ir import (
+    CUSTODY_MODES,
     ApprovalAuthority,
     ApprovalDecision,
     ApprovalStatus,
@@ -127,6 +128,25 @@ def _optional_idempotency_key(record: JsonObject) -> str | None:
     return value
 
 
+def _optional_custody_mode(record: JsonObject) -> str | None:
+    """Read an optional custody_mode, rejecting a malformed value.
+
+    Absent or null is fine (custody undeclared). The type check runs BEFORE the
+    membership test: an unhashable JSON value (list, object) would raise
+    TypeError out of a set membership test, escaping the RuntimeApiError path
+    the CLI handles and surfacing as a traceback instead of a rejection.
+    """
+
+    value = record.get("custody_mode")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in CUSTODY_MODES:
+        raise RuntimeApiError(
+            "intent.custody_mode must be 'record_only' or 'execute' when present"
+        )
+    return value
+
+
 def intent_from_record(record: JsonObject) -> Intent:
     """Lower a canonical intent record into the runtime dataclass."""
 
@@ -144,6 +164,7 @@ def intent_from_record(record: JsonObject) -> Intent:
             label="intent",
         ),
         idempotency_key=_optional_idempotency_key(record),
+        custody_mode=_optional_custody_mode(record),
     )
 
 

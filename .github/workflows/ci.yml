@@ -36,5 +36,10 @@ jobs:
           PY
       - name: Run governed-effect golden checks
         run: python scripts/run_tongue_golden_tests.py
+      # The custody_mode drift guard runs here rather than as a local-alpha gate:
+      # the validator's gate list is pinned by the published release notes, and
+      # adding a gate there would retroactively rewrite what v0.1.1 shipped with.
+      - name: Check custody_mode IR drift guard
+        run: python scripts/check_custody_mode_ir.py
       - name: Run local alpha validator
         run: python scripts/validate_local_alpha.py

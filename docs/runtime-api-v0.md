@@ -74,8 +74,64 @@ For local alpha, the public dispatcher supports:
 Expected outcomes:
 
 - `committed` only after adapter acknowledgement and runtime verification;
+- `approved` when the intent declared `record_only` custody and cleared every
+  check without committing;
 - `paused` when approval is required and absent;
 - `rejected` when a denial path is reached.
+
+### Declared custody
+
+`intent.custody_mode` names who performs the effect, before the run terminates.
+
+- `execute`, or the field unset, is the committing path above.
+- `record_only` runs the whole governed pipeline and stops before the adapter
+  commit. An external actor performs the effect.
+
+`record_only` reaches `approved` rather than `committed`, and every terminal
+result carries `effect.custody_mode` so an auditor reading the record can tell
+which custody was declared.
+
+**`custody_mode` records a declaration, not an authorization.** `interpret` runs
+the same pipeline without committing, so a dry run of a `record_only` intent
+also returns `approved` and also carries `custody_mode: "record_only"`. The two
+are not interchangeable: a dry run performs no effect and is therefore exempt
+from the rate budget, so at an exhausted budget a dry run still returns
+`approved` where the real run is rejected `scope_rate_limit_exceeded`. An
+external actor that treated the field alone as its go-ahead would act on a
+simulation.
+
+The proof of authorization is the terminal `custody.record_only` trace event.
+Only the real path emits it, only after admission, approval and the rate budget
+have all cleared. A run bundle persists `trace.json` beside `effect.json`, so
+that evidence travels with the record. Read both:
+
+```text
+effect.state == "approved"
+effect.custody_mode == "record_only"
+trace.events includes custody.record_only     # <- the authorization
+```
+
+Record-only custody skips the commit and nothing else. Capability checks, policy
+gates, the approval requirement and the scope rate budget all apply, because the
+effect still reaches the world.
+
+Retry-safety is bounded, and the boundary is exact:
+
+- A record-only proposal **is** checked against a key already claimed by a
+  committed effect. It cannot conflict with, or silently stand in for, an effect
+  fermata performed.
+- A record-only run writes **no** idempotency record, because there is no
+  committed result for a later retry to replay. Writing one would make a
+  subsequent `execute` under the same key replay an effect fermata never
+  performed.
+- Consequently two record-only proposals carrying the same key are **not**
+  deduplicated against each other, whether their intents agree or differ. Both
+  are admitted and both consume rate budget.
+
+At-most-once for the external effect is therefore the external actor's
+responsibility. Fermata bounds how many such effects a scope may authorize, and
+records each authorization; it does not and cannot deduplicate a commit it never
+performs.
 
 Committed outputs include:
 

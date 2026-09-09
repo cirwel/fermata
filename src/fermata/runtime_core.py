@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -471,6 +472,7 @@ def approved_result(
         intent_id=intent.intent_id,
         scope_id=scope.scope_id,
         approval=approval.to_record(),
+        custody_mode=intent.custody_mode,
     )
 
 
@@ -613,7 +615,43 @@ def evaluate_with_adapter(
 
     Required approvals should arrive as typed ``ApprovalDecision`` records.
     ``approval_granted`` remains as compatibility for older callers.
+
+    Every terminal result carries the custody the intent declared, so the
+    durable effect record says which custody produced it on the committed,
+    approved, paused and rejected paths alike. The committed and approved
+    results are stamped at construction, because those are the ones written to
+    the idempotency ledger; this wrapper only fills in the denial paths.
+
+    ``custody_mode`` records what the intent DECLARED. It is not by itself proof
+    that the effect was authorized — a dry run of a record_only intent carries
+    it too. The terminal ``custody.record_only`` trace event is that proof.
     """
+
+    result, trace = _evaluate_with_adapter(
+        scope,
+        proposal,
+        adapter,
+        approval_granted=approval_granted,
+        approval=approval,
+        _stop_at_approval=_stop_at_approval,
+    )
+    declared = proposal.intent.custody_mode if proposal.intent is not None else None
+    if declared is not None and result.custody_mode is None:
+        result = replace(result, custody_mode=declared)
+    return result, trace
+
+
+def _evaluate_with_adapter(
+    scope: Scope,
+    proposal: Proposal,
+    adapter: GovernedAdapter,
+    *,
+    approval_granted: bool = False,
+    approval: ApprovalDecision | None = None,
+    _stop_at_approval: bool = False,
+) -> tuple[EffectResult, Trace]:
+    """Evaluate one proposal. See ``evaluate_with_adapter``, which stamps the
+    declared custody onto whatever result this returns."""
 
     trace = Trace(trace_id=f"trace_{uuid.uuid4().hex[:8]}")
     trace.add(
@@ -638,6 +676,25 @@ def evaluate_with_adapter(
         operation=intent.operation,
         target=intent.target,
     )
+
+    # Declared custody, named up front so a record_only proposal is
+    # distinguishable from an execute one before the run terminates. This is a
+    # declaration, not yet a decision: the terminal custody.record_only event is
+    # emitted later, only once admission and approval have actually cleared.
+    if intent.custody_mode is not None:
+        trace.add(
+            "custody.declared",
+            intent_id=intent.intent_id,
+            custody_mode=intent.custody_mode,
+        )
+
+    # record_only is NOT a dry run, so it must not borrow the dry-run flag.
+    # _stop_at_approval also waives the idempotency lock, the replay/conflict
+    # lookup and the scope rate budget, and the justification for those waivers
+    # is that interpret() performs no effect at all. Under record_only the
+    # effect still reaches the world, through the external actor, so every one
+    # of those controls still applies. Only the adapter commit is skipped.
+    custody_record_only = intent.custody_mode == "record_only"
 
     if intent.adapter != adapter.adapter or intent.operation != adapter.operation:
         return reject(
@@ -708,6 +765,7 @@ def evaluate_with_adapter(
             approval=approval,
             approval_granted=approval_granted,
             _stop_at_approval=_stop_at_approval,
+            custody_record_only=custody_record_only,
         )
     finally:
         _release_idempotency_lock(lock_handle)
@@ -723,10 +781,16 @@ def _run_committable(
     approval: ApprovalDecision | None,
     approval_granted: bool,
     _stop_at_approval: bool,
+    custody_record_only: bool = False,
 ) -> tuple[EffectResult, Trace]:
     """Run the replay-check → prepare → approval → rate-budget → commit → record
     path. Extracted from ``evaluate_with_adapter`` so the whole critical section
     can run under a per-(scope, key) idempotency lock when a key is present.
+
+    ``_stop_at_approval`` is the dry-run flag: interpret() performs nothing, so
+    it skips the replay check and the rate budget. ``custody_record_only`` is a
+    different thing entirely — an intent declaring that an external actor will
+    perform the effect — so it runs every control and skips only the commit.
     """
 
     # Idempotent replay: if this scope already committed an effect under the same
@@ -838,14 +902,18 @@ def _run_committable(
         **approval_record,
     )
 
+    # Dry run stops here. It performs nothing and authorizes nothing, so it
+    # neither checks nor consumes the scope's budget.
     if _stop_at_approval:
         return approved_result(trace, scope, intent, approval_decision), trace
 
-    # Per-scope rolling-window rate budget: count committed effects in the
-    # trailing window and refuse once the scope is at its cap. Checked after
-    # approval (only an otherwise-committable effect consumes budget) and
-    # before commit (a refusal performs no external effect). Idempotent replays
-    # returned earlier never reach here, so they never consume budget.
+    # Per-scope rolling-window rate budget: count effects in the trailing window
+    # and refuse once the scope is at its cap. Checked after approval (only an
+    # otherwise-committable effect consumes budget) and before commit (a refusal
+    # performs no external effect). Idempotent replays returned earlier never
+    # reach here, so they never consume budget. A record_only effect DOES
+    # consume it: the scope's cap bounds external reach, and a record_only
+    # approval is external reach that an outside actor will perform.
     effect_now: float | None = None
     if scope.max_effects_per_window > 0:
         effect_now = _rate_now()
@@ -876,6 +944,39 @@ def _run_committable(
                 max_effects_per_window=scope.max_effects_per_window,
             ), trace
 
+    # Declared record-only custody: admission, approval and the rate budget have
+    # all now cleared, and the runtime stops without committing. Emitting the
+    # terminal event HERE rather than at declaration is what makes it evidence:
+    # a rejected or paused record_only run never reaches this line, so the event
+    # means "custody was honored", not merely "custody was declared".
+    if custody_record_only:
+        recorded = approved_result(trace, scope, intent, approval_decision)
+        trace.add(
+            "custody.record_only",
+            intent_id=intent.intent_id,
+            effect_id=recorded.effect_id,
+        )
+        # Consume budget, matching the check above. No idempotency record is
+        # written: that record exists so a later retry replays a COMMITTED
+        # result instead of re-running the adapter, and there is no committed
+        # result here. Writing one would make a later execute under the same key
+        # replay an effect fermata never performed.
+        #
+        # The consequence is a REAL and bounded limit, not an oversight. A
+        # record_only proposal is still checked against a key already claimed by
+        # a committed effect, but two record_only proposals carrying the same
+        # key do not conflict with each other, because neither leaves a record
+        # to conflict against. At-most-once for the external effect belongs to
+        # whoever performs it. self_tests pins both halves of this boundary.
+        _record_rate_entry(
+            scope,
+            trace,
+            effect_now,
+            effect_id=recorded.effect_id,
+            committed_at=None,
+        )
+        return recorded, trace
+
     trace.add(
         "adapter.commit.started",
         adapter=adapter.adapter,
@@ -901,6 +1002,10 @@ def _run_committable(
         verification=commit_evidence.verification,
         approval=approval_record,
         committed_at=commit_evidence.committed_at,
+        # Stamped HERE, at construction, not by the caller after the fact: the
+        # idempotency ledger serializes this record below, and a stamp applied
+        # to the returned object would leave the durable copy without it.
+        custody_mode=intent.custody_mode,
     )
 
     # Record the key so a later retry replays this result instead of committing
@@ -924,25 +1029,50 @@ def _run_committable(
                 error_type=exc.__class__.__name__,
             )
 
-    # Record this committed effect against the scope's rate budget. As with the
-    # idempotency record, the effect has already happened, so a recording
-    # failure is traced rather than raised — it can only under-count the window.
-    if scope.max_effects_per_window > 0 and effect_now is not None:
-        try:
-            rate_record(
-                scope,
-                {
-                    "ts": effect_now,
-                    "scope_id": scope.scope_id,
-                    "effect_id": committed.effect_id,
-                    "committed_at": committed.committed_at,
-                },
-                retain_since=effect_now - scope.rate_window_seconds,
-            )
-        except (OSError, ValueError) as exc:
-            trace.add(
-                "effect.rate_record_failed",
-                error_type=exc.__class__.__name__,
-            )
+    _record_rate_entry(
+        scope,
+        trace,
+        effect_now,
+        effect_id=committed.effect_id,
+        committed_at=committed.committed_at,
+    )
 
     return committed, trace
+
+
+def _record_rate_entry(
+    scope: Scope,
+    trace: Trace,
+    effect_now: float | None,
+    *,
+    effect_id: str,
+    committed_at: str | None,
+) -> None:
+    """Record one effect against the scope's rolling rate budget.
+
+    Shared by the commit path and the record_only path so both consume budget
+    through the same ledger write. As with the idempotency record, the effect
+    has already happened (or been authorized), so a recording failure is traced
+    rather than raised — it can only under-count the window.
+    """
+
+    if scope.max_effects_per_window <= 0 or effect_now is None:
+        return
+    entry: dict[str, Any] = {
+        "ts": effect_now,
+        "scope_id": scope.scope_id,
+        "effect_id": effect_id,
+    }
+    if committed_at is not None:
+        entry["committed_at"] = committed_at
+    try:
+        rate_record(
+            scope,
+            entry,
+            retain_since=effect_now - scope.rate_window_seconds,
+        )
+    except (OSError, ValueError) as exc:
+        trace.add(
+            "effect.rate_record_failed",
+            error_type=exc.__class__.__name__,
+        )
