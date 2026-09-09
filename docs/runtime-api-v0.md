@@ -89,9 +89,27 @@ Expected outcomes:
 
 `record_only` reaches `approved` rather than `committed`, and every terminal
 result carries `effect.custody_mode` so an auditor reading the record can tell
-which custody produced it. Under `run`, an `approved` outcome therefore means
-one of two different things, distinguished by that field: a `record_only` effect
-that cleared every check, or a dry run that was never going to commit.
+which custody was declared.
+
+**`custody_mode` records a declaration, not an authorization.** `interpret` runs
+the same pipeline without committing, so a dry run of a `record_only` intent
+also returns `approved` and also carries `custody_mode: "record_only"`. The two
+are not interchangeable: a dry run performs no effect and is therefore exempt
+from the rate budget, so at an exhausted budget a dry run still returns
+`approved` where the real run is rejected `scope_rate_limit_exceeded`. An
+external actor that treated the field alone as its go-ahead would act on a
+simulation.
+
+The proof of authorization is the terminal `custody.record_only` trace event.
+Only the real path emits it, only after admission, approval and the rate budget
+have all cleared. A run bundle persists `trace.json` beside `effect.json`, so
+that evidence travels with the record. Read both:
+
+```text
+effect.state == "approved"
+effect.custody_mode == "record_only"
+trace.events includes custody.record_only     # <- the authorization
+```
 
 Record-only custody skips the commit and nothing else. Capability checks, policy
 gates, the approval requirement and the scope rate budget all apply, because the

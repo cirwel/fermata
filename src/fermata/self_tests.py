@@ -31,6 +31,7 @@ from fermata.network_adapter import (
 from fermata.runtime_api import RuntimeApiError, intent_from_record
 from fermata.runtime_core import (
     append_trace_ledger,
+    idempotency_lookup,
     rate_count_recent,
     rate_store_path,
     trace_ledger_path,
@@ -2213,6 +2214,57 @@ def run_self_tests() -> dict[str, Any]:
         assert pair_second.rejection_reason is None
         results["custody_record_only_pair_not_deduplicated"] = {
             "documented_limit": "record_only leaves no record to conflict against"
+        }
+
+        # The durable idempotency ledger copy must carry custody too. Stamping
+        # the returned object is not enough: the commit path serializes the
+        # record into the ledger before the caller ever sees it, so a post-hoc
+        # stamp leaves the persisted copy blank.
+        ledger_scope = sample_scope(
+            Path(tmp) / "custody_ledger", approval_required=False
+        )
+        ledger_committed, _ = evaluate_file_write(
+            ledger_scope, _keyed_custody_proposal("execute", "ledger\n")
+        )
+        assert ledger_committed.state == EffectState.COMMITTED
+        ledger_prior = idempotency_lookup(ledger_scope, "CUSTODY_K1")
+        assert ledger_prior is not None
+        assert ledger_prior["effect"]["custody_mode"] == "execute"
+        results["custody_mode_in_idempotency_ledger"] = {"persisted": True}
+
+        # custody_mode is a DECLARATION, not an authorization. A dry run of a
+        # record_only intent carries the same field and the same approved state,
+        # and — being effect-free — is exempt from the rate budget, so at an
+        # exhausted budget the dry run still reports approved where the real run
+        # is refused. Only the terminal custody.record_only event separates
+        # them, and only the real path emits it. An external actor that read the
+        # field alone would act on a simulation.
+        exhausted_scope = replace(
+            sample_scope(Path(tmp) / "custody_dryrun", approval_required=False),
+            max_effects_per_window=1,
+            rate_window_seconds=3600.0,
+        )
+        first_real, first_trace = evaluate_file_write(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-1.txt")
+        )
+        assert first_real.state == EffectState.APPROVED
+        assert "custody.record_only" in [e["type"] for e in first_trace.events]
+        refused_real, _ = evaluate_file_write(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-2.txt")
+        )
+        assert refused_real.state == EffectState.REJECTED
+        assert refused_real.rejection_reason == "scope_rate_limit_exceeded"
+        dry_effect, dry_trace = interpret(
+            exhausted_scope, _custody_file_proposal("record_only", "dry-3.txt")
+        )
+        dry_events = [event["type"] for event in dry_trace.events]
+        assert dry_effect.state == EffectState.APPROVED
+        assert dry_effect.custody_mode == "record_only"
+        assert "custody.record_only" not in dry_events
+        assert "custody.declared" in dry_events
+        results["custody_dry_run_is_not_authorization"] = {
+            "field_shared": True,
+            "terminal_event_absent_in_dry_run": True,
         }
 
         # A record_only approval is external reach, so it consumes the scope's

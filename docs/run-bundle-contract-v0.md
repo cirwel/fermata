@@ -131,7 +131,9 @@ With `intent.custody_mode` set to `record_only`:
 - `effect.state` is `approved`;
 - `effect.custody_mode` is `record_only`;
 - `custody.declared` is present in the trace, and `custody.record_only` is
-  present only when admission and approval actually cleared;
+  present only when admission, approval and the rate budget actually cleared.
+  That event, not the `custody_mode` field, is what says the effect was
+  authorized: a dry run of the same intent also carries the field;
 - `adapter.commit.started` and `effect.committed` are absent from the trace;
 - `acknowledgement`, `verification`, and `committed_at` are absent from the
   effect;

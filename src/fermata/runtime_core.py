@@ -472,6 +472,7 @@ def approved_result(
         intent_id=intent.intent_id,
         scope_id=scope.scope_id,
         approval=approval.to_record(),
+        custody_mode=intent.custody_mode,
     )
 
 
@@ -617,7 +618,13 @@ def evaluate_with_adapter(
 
     Every terminal result carries the custody the intent declared, so the
     durable effect record says which custody produced it on the committed,
-    approved, paused and rejected paths alike.
+    approved, paused and rejected paths alike. The committed and approved
+    results are stamped at construction, because those are the ones written to
+    the idempotency ledger; this wrapper only fills in the denial paths.
+
+    ``custody_mode`` records what the intent DECLARED. It is not by itself proof
+    that the effect was authorized — a dry run of a record_only intent carries
+    it too. The terminal ``custody.record_only`` trace event is that proof.
     """
 
     result, trace = _evaluate_with_adapter(
@@ -995,6 +1002,10 @@ def _run_committable(
         verification=commit_evidence.verification,
         approval=approval_record,
         committed_at=commit_evidence.committed_at,
+        # Stamped HERE, at construction, not by the caller after the fact: the
+        # idempotency ledger serializes this record below, and a stamp applied
+        # to the returned object would leave the durable copy without it.
+        custody_mode=intent.custody_mode,
     )
 
     # Record the key so a later retry replays this result instead of committing
