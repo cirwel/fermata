@@ -93,11 +93,27 @@ which custody produced it. Under `run`, an `approved` outcome therefore means
 one of two different things, distinguished by that field: a `record_only` effect
 that cleared every check, or a dry run that was never going to commit.
 
-Record-only custody skips the commit and nothing else. The idempotency conflict
-check and the scope rate budget both apply, because the effect still reaches the
-world. What it does **not** get is an idempotency record: fermata records no
-completed effect for a commit it did not perform, so retry-replay is the
-external actor's responsibility, not the runtime's.
+Record-only custody skips the commit and nothing else. Capability checks, policy
+gates, the approval requirement and the scope rate budget all apply, because the
+effect still reaches the world.
+
+Retry-safety is bounded, and the boundary is exact:
+
+- A record-only proposal **is** checked against a key already claimed by a
+  committed effect. It cannot conflict with, or silently stand in for, an effect
+  fermata performed.
+- A record-only run writes **no** idempotency record, because there is no
+  committed result for a later retry to replay. Writing one would make a
+  subsequent `execute` under the same key replay an effect fermata never
+  performed.
+- Consequently two record-only proposals carrying the same key are **not**
+  deduplicated against each other, whether their intents agree or differ. Both
+  are admitted and both consume rate budget.
+
+At-most-once for the external effect is therefore the external actor's
+responsibility. Fermata bounds how many such effects a scope may authorize, and
+records each authorization; it does not and cannot deduplicate a commit it never
+performs.
 
 Committed outputs include:
 

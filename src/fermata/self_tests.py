@@ -2176,6 +2176,45 @@ def run_self_tests() -> dict[str, Any]:
         assert keyed_conflict.rejection_reason == "idempotency_key_conflict"
         results["custody_record_only_honors_idempotency"] = {"conflict_detected": True}
 
+        # The other half of that boundary, pinned so it cannot drift silently.
+        # record_only writes no idempotency record, so two record_only proposals
+        # carrying the same key do NOT conflict with each other even when their
+        # intents differ. This is a documented limit, not a bug: fermata cannot
+        # deduplicate a commit it never performs. If a future change makes these
+        # conflict, the guarantee in docs/runtime-api-v0.md has moved and must
+        # be rewritten with it.
+        pair_scope = sample_scope(Path(tmp) / "custody_pair", approval_required=False)
+
+        def _pair_proposal(content: str) -> Proposal:
+            return Proposal(
+                proposal_id="prop_custody_pair_001",
+                actor="agent:hermes",
+                speech_act="intend",
+                reason="two record_only proposals under one key",
+                confidence=0.8,
+                evidence=[],
+                intent=Intent(
+                    intent_id="intent_custody_pair_001",
+                    proposal_id="prop_custody_pair_001",
+                    adapter="file",
+                    operation="write",
+                    target="custody-pair.txt",
+                    input={"content": content},
+                    required_capability="file.write",
+                    custody_mode="record_only",
+                    idempotency_key="CUSTODY_PAIR",
+                ),
+            )
+
+        pair_first, _ = evaluate_file_write(pair_scope, _pair_proposal("v1\n"))
+        pair_second, _ = evaluate_file_write(pair_scope, _pair_proposal("DIFFERENT\n"))
+        assert pair_first.state == EffectState.APPROVED
+        assert pair_second.state == EffectState.APPROVED
+        assert pair_second.rejection_reason is None
+        results["custody_record_only_pair_not_deduplicated"] = {
+            "documented_limit": "record_only leaves no record to conflict against"
+        }
+
         # A record_only approval is external reach, so it consumes the scope's
         # rate budget. Before this was separated from the dry-run flag,
         # record_only returned before the budget check and consumed nothing.

@@ -140,9 +140,15 @@ With `intent.custody_mode` set to `record_only`:
   authorizes an effect fermata will not carry out and cannot verify.
 
 Record-only custody is a declaration about who commits, not an exemption from
-governance. Capability checks, policy gates, the approval requirement, the
-idempotency conflict check, and the scope rate budget all apply exactly as they
-do to a committing effect. Only the adapter commit is skipped.
+governance. Capability checks, policy gates, the approval requirement and the
+scope rate budget all apply exactly as they do to a committing effect. Only the
+adapter commit is skipped.
+
+Retry-safety is the exception, and it is bounded rather than absent: a
+record-only proposal is checked against a key already claimed by a committed
+effect, but writes no record of its own, so two record-only proposals carrying
+the same key are not deduplicated against each other. See the runtime API
+reference for the exact boundary.
 
 With `intent.custody_mode` set to `execute`, the outcome is the committing path
 above, and `effect.custody_mode` is `execute`.

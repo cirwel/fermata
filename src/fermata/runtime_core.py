@@ -954,6 +954,13 @@ def _run_committable(
         # result instead of re-running the adapter, and there is no committed
         # result here. Writing one would make a later execute under the same key
         # replay an effect fermata never performed.
+        #
+        # The consequence is a REAL and bounded limit, not an oversight. A
+        # record_only proposal is still checked against a key already claimed by
+        # a committed effect, but two record_only proposals carrying the same
+        # key do not conflict with each other, because neither leaves a record
+        # to conflict against. At-most-once for the external effect belongs to
+        # whoever performs it. self_tests pins both halves of this boundary.
         _record_rate_entry(
             scope,
             trace,
